@@ -1,28 +1,42 @@
 # Multi-AI Orchestration Pipeline
 
-A development pipeline that orchestrates multiple AI agents to implement, review, and iterate on code changes.
+A development pipeline that orchestrates multiple AI agents to plan, implement, review, and iterate on code changes.
 
-- **Gemini CLI** - Orchestrator/Coordinator
-- **Claude Code** - Implementation/Coder
-- **Codex CLI** - Code Reviewer
+- **Gemini CLI** - Orchestrator/Coordinator (does NOT write code)
+- **Claude Code** - Plan Refiner + Implementation Coder
+- **Codex CLI** - Plan Reviewer + Code Reviewer
 
 ## How It Works
 
+### Phase 1: Planning
 ```
-User Request → Gemini (plan) → Claude (implement) → Codex (review) →
-                                      ↑                    ↓
-                                      └──── fix ←─── needs changes?
-                                                           ↓
-                                                      approved → commit
+User Request → Gemini (draft plan) → Claude (refine plan) → Codex (review plan)
+                                           ↑                       ↓
+                                           └──── needs changes ────┘
+                                                                   ↓
+                                                              approved
+                                                                   ↓
+                                                          plan-to-task.sh
+```
+
+### Phase 2: Implementation
+```
+Task → Claude (implement) → Codex (review code) → approved → commit
+              ↑                     ↓
+              └──── fix ←─── needs changes
 ```
 
 1. User describes a feature or task
-2. Gemini creates a structured task definition
-3. Claude implements following project standards
-4. Codex reviews against the checklist
-5. If changes needed, Claude fixes and Codex re-reviews
-6. Loop until approved (max iterations configurable)
-7. Commit on approval
+2. Gemini creates an initial plan (`plan.json`)
+3. Claude refines the plan with technical details (`plan-refined.json`)
+4. Codex reviews the plan for completeness and feasibility
+5. If plan needs changes, Claude refines again (loop until approved)
+6. Once plan approved, Gemini converts it to a task
+7. Claude implements following project standards
+8. Codex reviews code against the checklist
+9. If code needs changes, Claude fixes and Codex re-reviews
+10. Loop until approved (max iterations configurable)
+11. Commit on approval
 
 ## Prerequisites
 
@@ -63,16 +77,31 @@ User Request → Gemini (plan) → Claude (implement) → Codex (review) →
    git update-index --skip-worktree .task/state.json .task/tasks.json .task/current-task.json.example
    ```
 
-4. **Create your first task:**
+4. **Create your first plan:**
    ```bash
-   cp .task/current-task.json.example .task/current-task.json
-   # Edit the task with your requirements
-   vim .task/current-task.json
+   # Create a plan file (or let Gemini create it)
+   cat > .task/plan.json << 'EOF'
+   {
+     "id": "plan-001",
+     "title": "Your feature title",
+     "description": "What you want to build",
+     "requirements": ["requirement 1", "requirement 2"],
+     "created_at": "2025-12-18T00:00:00Z",
+     "created_by": "gemini"
+   }
+   EOF
    ```
 
-5. **Run the pipeline:**
+5. **Run the planning phase:**
    ```bash
-   ./scripts/state-manager.sh set implementing your-task-id
+   ./scripts/state-manager.sh set plan_refining plan-001
+   ./scripts/orchestrator.sh
+   # Wait for plan approval, then:
+   ./scripts/plan-to-task.sh
+   ```
+
+6. **Run the implementation phase:**
+   ```bash
    ./scripts/orchestrator.sh
    ```
 
@@ -158,37 +187,45 @@ git update-index --no-skip-worktree .task/state.json
 your-project/
 ├── pipeline.config.json      # Pipeline configuration
 ├── GEMINI.md                 # Gemini orchestrator instructions
-├── CLAUDE.md                 # Claude coder instructions
+├── CLAUDE.md                 # Claude coder/refiner instructions
 ├── AGENTS.md                 # Codex reviewer instructions
 ├── docs/
 │   ├── standards.md          # Coding + review standards
 │   ├── workflow.md           # Process documentation
 │   └── schemas/
-│       └── review-result.schema.json
+│       ├── review-result.schema.json   # Code review output schema
+│       └── plan-review.schema.json     # Plan review output schema
 ├── scripts/
 │   ├── orchestrator.sh       # Main pipeline loop
-│   ├── run-claude.sh         # Claude executor
-│   ├── run-codex-review.sh   # Codex executor
+│   ├── run-claude.sh         # Claude implementation executor
+│   ├── run-claude-plan.sh    # Claude plan refinement executor
+│   ├── run-codex-review.sh   # Codex code review executor
+│   ├── run-codex-plan-review.sh  # Codex plan review executor
+│   ├── plan-to-task.sh       # Convert approved plan to task
 │   ├── state-manager.sh      # State management
 │   ├── error-handler.sh      # Error logging
 │   └── recover.sh            # Recovery tool
 └── .task/                    # Runtime state (gitignored)
     ├── state.json            # Pipeline state
     ├── tasks.json            # Task queue
+    ├── plan.json             # Initial plan (Gemini creates)
+    ├── plan-refined.json     # Refined plan (Claude creates)
+    ├── plan-review.json      # Plan review (Codex creates)
     ├── current-task.json     # Active task
-    ├── impl-result.json      # Claude output
-    └── review-result.json    # Codex output
+    ├── impl-result.json      # Implementation output
+    └── review-result.json    # Code review output
 ```
 
 ## Usage
 
-### Create a Task
+### Phase 1: Create and Approve a Plan
+
+**Step 1: Create initial plan (Gemini does this)**
 
 ```bash
-cat > .task/current-task.json << 'EOF'
+cat > .task/plan.json << 'EOF'
 {
-  "id": "feature-001",
-  "type": "feature",
+  "id": "plan-001",
   "title": "Add user authentication",
   "description": "Implement JWT-based authentication with login/logout",
   "requirements": [
@@ -197,21 +234,45 @@ cat > .task/current-task.json << 'EOF'
     "JWT token validation middleware",
     "Unit tests for auth functions"
   ],
-  "context": {
-    "related_files": ["src/routes/", "src/middleware/"]
-  },
   "created_at": "2025-12-18T00:00:00Z",
   "created_by": "gemini"
 }
 EOF
 ```
 
-### Run the Pipeline
+**Step 2: Refine and review the plan**
 
 ```bash
-# Set state and run
-./scripts/state-manager.sh set implementing feature-001
+# Set state and run plan refinement (Claude)
+./scripts/state-manager.sh set plan_refining plan-001
 ./scripts/orchestrator.sh
+
+# This will automatically:
+# 1. Claude refines plan -> plan-refined.json
+# 2. Codex reviews plan -> plan-review.json
+# 3. Loop until approved or limit reached
+```
+
+**Step 3: Convert approved plan to task**
+
+```bash
+# Check if plan was approved
+cat .task/plan-review.json | jq '.status'
+
+# If approved, convert to task
+./scripts/plan-to-task.sh
+```
+
+### Phase 2: Implementation
+
+```bash
+# Run the implementation pipeline
+./scripts/orchestrator.sh
+
+# This will automatically:
+# 1. Claude implements -> impl-result.json
+# 2. Codex reviews code -> review-result.json
+# 3. Loop until approved or limit reached
 ```
 
 ### Check Status
@@ -228,6 +289,21 @@ EOF
 
 # Or reset directly
 ./scripts/orchestrator.sh reset
+```
+
+### Handling User Input Requests
+
+If Claude needs clarification, the pipeline pauses with `needs_user_input` state:
+
+```bash
+# Check what questions need answering
+cat .task/state.json | jq '.previous_state'  # See which phase
+cat .task/plan-refined.json | jq '.questions'  # Plan phase questions
+cat .task/impl-result.json | jq '.questions'   # Implementation questions
+
+# After providing answers, resume:
+./scripts/state-manager.sh set plan_refining plan-001  # or implementing task-001
+./scripts/orchestrator.sh
 ```
 
 ## Configuration
