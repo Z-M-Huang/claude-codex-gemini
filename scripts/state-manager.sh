@@ -34,11 +34,38 @@ set_state() {
   local new_status="$1"
   local task_id="$2"
 
-  jq --arg s "$new_status" --arg t "$task_id" \
-    '.status = $s | .current_task_id = $t | .updated_at = (now | todate)' \
-    "$STATE_FILE" > "${STATE_FILE}.tmp"
+  local current_status
+  current_status=$(jq -r '.status' "$STATE_FILE")
+
+  # Store previous state when transitioning to error or needs_user_input
+  # But preserve existing previous_state if we're already in that state (avoid clobbering)
+  local prev_state=""
+  if [[ "$new_status" == "error" || "$new_status" == "needs_user_input" ]]; then
+    if [[ "$current_status" == "$new_status" ]]; then
+      # Already in this state - preserve existing previous_state
+      prev_state=$(jq -r '.previous_state // empty' "$STATE_FILE")
+    else
+      # Transitioning into this state - record where we came from
+      prev_state="$current_status"
+    fi
+  fi
+
+  if [[ -n "$prev_state" ]]; then
+    jq --arg s "$new_status" --arg t "$task_id" --arg p "$prev_state" \
+      '.status = $s | .current_task_id = $t | .previous_state = $p | .updated_at = (now | todate)' \
+      "$STATE_FILE" > "${STATE_FILE}.tmp"
+  else
+    jq --arg s "$new_status" --arg t "$task_id" \
+      '.status = $s | .current_task_id = $t | del(.previous_state) | .updated_at = (now | todate)' \
+      "$STATE_FILE" > "${STATE_FILE}.tmp"
+  fi
 
   mv "${STATE_FILE}.tmp" "$STATE_FILE"
+}
+
+# Get previous state (used for error recovery)
+get_previous_state() {
+  jq -r '.previous_state // empty' "$STATE_FILE"
 }
 
 # Increment iteration (for review loops)

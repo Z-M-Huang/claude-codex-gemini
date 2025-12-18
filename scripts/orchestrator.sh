@@ -66,6 +66,19 @@ run_implementation() {
   task_id=$(get_task_id)
 
   if "$SCRIPT_DIR/run-claude.sh"; then
+    # Check if Claude needs clarification
+    if [[ -f .task/impl-result.json ]]; then
+      local status
+      status=$(jq -r '.status' .task/impl-result.json)
+
+      if [[ "$status" == "needs_clarification" ]]; then
+        log_warn "Claude needs clarification from user"
+        log_info "Questions saved to .task/impl-result.json"
+        set_state "needs_user_input" "$task_id"
+        return 0
+      fi
+    fi
+
     log_success "Implementation completed"
     set_state "reviewing" "$task_id"
     return 0
@@ -141,6 +154,80 @@ run_fix() {
   fi
 }
 
+# Run plan refinement phase (Claude refines initial plan)
+run_plan_refinement() {
+  log_info "Running plan refinement (Claude)..."
+  local plan_id
+  plan_id=$(jq -r '.id // "unknown"' .task/plan.json 2>/dev/null || echo "unknown")
+
+  if "$SCRIPT_DIR/run-claude-plan.sh"; then
+    # Check if Claude needs clarification on the plan
+    if [[ -f .task/plan-refined.json ]]; then
+      local needs_input
+      needs_input=$(jq -r '.needs_clarification // false' .task/plan-refined.json)
+
+      if [[ "$needs_input" == "true" ]]; then
+        log_warn "Claude needs clarification on the plan"
+        log_info "Questions saved to .task/plan-refined.json"
+        set_state "needs_user_input" "$plan_id"
+        return 0
+      fi
+    fi
+
+    log_success "Plan refinement completed"
+    set_state "plan_reviewing" "$plan_id"
+    return 0
+  else
+    local exit_code=$?
+    log_error "Plan refinement failed with exit code $exit_code"
+    log_error_to_file "plan_refining" "$exit_code" "Claude plan refinement failed"
+    return 1
+  fi
+}
+
+# Run plan review phase (Codex reviews refined plan)
+run_plan_review() {
+  log_info "Running plan review (Codex)..."
+  local plan_id
+  plan_id=$(jq -r '.id // "unknown"' .task/plan-refined.json 2>/dev/null || echo "unknown")
+
+  if "$SCRIPT_DIR/run-codex-plan-review.sh"; then
+    log_success "Plan review completed"
+
+    # Check review result
+    local status
+    status=$(jq -r '.status' .task/plan-review.json)
+
+    case "$status" in
+      approved)
+        log_success "Plan approved! Ready for implementation."
+        log_info "Run ./scripts/plan-to-task.sh to convert plan to task"
+        # Don't auto-transition - let Gemini decide when to start implementation
+        exit 0
+        ;;
+      needs_changes)
+        log_warn "Plan needs changes"
+        increment_iteration
+
+        if [[ $(exceeded_review_limit) == "1" ]]; then
+          log_error "Exceeded plan review loop limit"
+          set_state "error" "$plan_id"
+          return 1
+        fi
+
+        # Go back to Claude for refinement with feedback
+        set_state "plan_refining" "$plan_id"
+        ;;
+    esac
+    return 0
+  else
+    local exit_code=$?
+    log_error "Plan review failed with exit code $exit_code"
+    log_error_to_file "plan_reviewing" "$exit_code" "Codex plan review failed"
+    return 1
+  fi
+}
+
 # Track retry attempts (stored in state file)
 get_error_retry_count() {
   jq -r '.error_retry_count // 0' .task/state.json
@@ -166,31 +253,59 @@ handle_error() {
   retry_count=$(get_error_retry_count)
   local max_retries
   max_retries=$(get_max_retries)
+  local previous_state
+  previous_state=$(get_previous_state)
 
   log_error "Pipeline in error state for task: $task_id"
+  log_info "Failed in state: $previous_state"
   log_info "Auto-resolve attempt: $((retry_count + 1)) / $max_retries"
+
+  # Determine if this was a plan phase or implementation phase error
+  local is_plan_phase=0
+  case "$previous_state" in
+    plan_refining|plan_reviewing)
+      is_plan_phase=1
+      ;;
+  esac
 
   if [[ $retry_count -lt $max_retries ]]; then
     increment_error_retry
 
-    # Determine retry strategy based on attempt number
-    case $retry_count in
-      0)
-        log_info "Strategy: Retry with same approach..."
-        ;;
-      1)
-        log_info "Strategy: Clear intermediate files and retry..."
-        rm -f .task/impl-result.json
-        ;;
-      2)
-        log_info "Strategy: Full reset and retry..."
-        rm -f .task/impl-result.json .task/review-result.json
-        ;;
-    esac
-
-    # Reset to implementing state to retry
-    set_state "implementing" "$task_id"
-    log_info "Retrying implementation..."
+    if [[ $is_plan_phase -eq 1 ]]; then
+      # Plan phase retry strategies
+      case $retry_count in
+        0)
+          log_info "Strategy: Retry plan refinement..."
+          ;;
+        1)
+          log_info "Strategy: Clear refined plan and retry..."
+          rm -f .task/plan-refined.json
+          ;;
+        2)
+          log_info "Strategy: Full plan reset and retry..."
+          rm -f .task/plan-refined.json .task/plan-review.json
+          ;;
+      esac
+      set_state "plan_refining" "$task_id"
+      log_info "Retrying plan refinement..."
+    else
+      # Implementation phase retry strategies
+      case $retry_count in
+        0)
+          log_info "Strategy: Retry with same approach..."
+          ;;
+        1)
+          log_info "Strategy: Clear intermediate files and retry..."
+          rm -f .task/impl-result.json
+          ;;
+        2)
+          log_info "Strategy: Full reset and retry..."
+          rm -f .task/impl-result.json .task/review-result.json
+          ;;
+      esac
+      set_state "implementing" "$task_id"
+      log_info "Retrying implementation..."
+    fi
   else
     # Exhausted retries - pause for user intervention
     log_error "Exhausted all $max_retries auto-resolve attempts"
@@ -321,8 +436,35 @@ main_loop() {
         # For MVP, exit and let user create task manually
         exit 0
         ;;
+      plan_drafting)
+        log_info "Plan drafting handled by Gemini orchestrator"
+        log_info "Create .task/plan.json and set state to plan_refining"
+        exit 0
+        ;;
+      plan_refining)
+        if ! run_plan_refinement; then
+          set_state "error" "$(jq -r '.id // ""' .task/plan.json 2>/dev/null)"
+        fi
+        ;;
+      plan_reviewing)
+        if ! run_plan_review; then
+          set_state "error" "$(jq -r '.id // ""' .task/plan-refined.json 2>/dev/null)"
+        fi
+        ;;
       planning|consulting)
         log_info "Planning/consulting handled by Gemini orchestrator"
+        exit 0
+        ;;
+      needs_user_input)
+        log_warn "Pipeline paused - user input required"
+        log_info "Gemini should:"
+        log_info "  1. Read questions from .task/impl-result.json or .task/plan-refined.json"
+        log_info "  2. Ask the user for clarification"
+        log_info "  3. Update the task/plan with user answers"
+        log_info "  4. Set state back to previous phase to continue"
+        log_info ""
+        log_info "To resume after providing answers:"
+        log_info "  ./scripts/state-manager.sh set <plan_refining|implementing> <task_id>"
         exit 0
         ;;
       implementing)
@@ -379,6 +521,8 @@ case "${1:-run}" in
     log_warn "Resetting pipeline state..."
     set_state "idle" ""
     rm -f .task/impl-result.json .task/review-result.json .task/debate.json
+    rm -f .task/plan.json .task/plan-refined.json .task/plan-review.json
+    rm -f .task/current-task.json
     log_success "Pipeline reset to idle"
     ;;
   *)

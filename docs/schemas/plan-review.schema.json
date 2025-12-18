@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plan Review Result",
+  "type": "object",
+  "required": ["status", "summary", "concerns", "reviewed_by", "reviewed_at"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["approved", "needs_changes"],
+      "description": "Overall plan review decision"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief overall assessment of the plan"
+    },
+    "concerns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "area", "message"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["error", "warning", "suggestion"],
+            "description": "How serious the concern is"
+          },
+          "area": {
+            "type": "string",
+            "enum": ["requirements", "approach", "complexity", "risks", "feasibility"],
+            "description": "Which aspect of the plan the concern relates to"
+          },
+          "message": {
+            "type": "string",
+            "description": "Description of the concern"
+          },
+          "suggestion": {
+            "type": "string",
+            "description": "How to address this concern"
+          }
+        }
+      },
+      "description": "List of concerns found during review"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "const": "codex",
+      "description": "Agent that performed the review"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 timestamp of when review was completed"
+    }
+  },
+  "additionalProperties": false
+}

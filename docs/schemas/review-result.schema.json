@@ -36,7 +36,7 @@
             "type": "string"
           }
         },
-        "required": ["id", "severity", "file", "message"],
+        "required": ["id", "severity", "file", "line", "message", "suggestion"],
         "additionalProperties": false
       }
     },
@@ -64,9 +64,16 @@
           "enum": ["PASS", "WARN", "FAIL"]
         }
       },
+      "required": [
+        "security",
+        "logic",
+        "standards",
+        "tests",
+        "over_engineering"
+      ],
       "additionalProperties": false
     }
   },
-  "required": ["status", "summary", "issues"],
+  "required": ["status", "summary", "issues", "checklist"],
   "additionalProperties": false
 }
