@@ -58,6 +58,9 @@ User Request → Gemini (plan) → Claude (implement) → Codex (review) →
 3. **Initialize the pipeline:**
    ```bash
    ./scripts/state-manager.sh init
+
+   # Tell git to ignore local changes to state files
+   git update-index --skip-worktree .task/state.json .task/tasks.json .task/current-task.json.example
    ```
 
 4. **Create your first task:**
@@ -128,6 +131,26 @@ User Request → Gemini (plan) → Claude (implement) → Codex (review) →
    cd /path/to/your/project
    ./scripts/state-manager.sh init
    ```
+
+## After Cloning
+
+The `.task/` folder contains initial state files that are tracked in git but should not have local changes committed. After cloning, run:
+
+```bash
+git update-index --skip-worktree .task/state.json .task/tasks.json .task/current-task.json.example
+```
+
+This tells git to ignore your local modifications to these files. The `.gitignore` already excludes new files in `.task/` (like `impl-result.json`, `review-result.json`, error logs).
+
+**To check skip-worktree status:**
+```bash
+git ls-files -v .task/ | grep '^S'  # S = skip-worktree is set
+```
+
+**To undo (if you need to commit changes):**
+```bash
+git update-index --no-skip-worktree .task/state.json
+```
 
 ## Project Structure
 
