@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["approved", "needs_changes", "rejected"]
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief overall assessment"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique issue ID for debate references (e.g., issue-1)"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["error", "warning", "suggestion"]
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "number"
+          },
+          "message": {
+            "type": "string"
+          },
+          "suggestion": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "severity", "file", "message"],
+        "additionalProperties": false
+      }
+    },
+    "checklist": {
+      "type": "object",
+      "properties": {
+        "security": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"]
+        },
+        "logic": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"]
+        },
+        "standards": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"]
+        },
+        "tests": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"]
+        },
+        "over_engineering": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["status", "summary", "issues"],
+  "additionalProperties": false
+}
