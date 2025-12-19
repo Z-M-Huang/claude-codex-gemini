@@ -68,6 +68,19 @@ get_previous_state() {
   jq -r '.previous_state // empty' "$STATE_FILE"
 }
 
+# Check if state file is readable (for non-mutating commands)
+check_state_readable() {
+  if [[ ! -f "$STATE_FILE" ]]; then
+    echo "State file missing. Run './scripts/orchestrator.sh' to initialize."
+    return 1
+  fi
+  if ! jq empty "$STATE_FILE" 2>/dev/null; then
+    echo "State file invalid JSON. Run './scripts/orchestrator.sh reset' to fix."
+    return 1
+  fi
+  return 0
+}
+
 # Increment iteration (for review loops)
 increment_iteration() {
   jq '.iteration += 1 | .updated_at = (now | todate)' \
@@ -111,7 +124,20 @@ is_stuck() {
   [[ $diff -gt $timeout_seconds ]] && echo "1" || echo "0"
 }
 
-# Get review loop limit from config
+# Get config value with local override support
+get_config_value() {
+  local filter="$1"
+  local base_cfg="pipeline.config.json"
+  local local_cfg="pipeline.config.local.json"
+
+  if [[ -f "$local_cfg" ]] && jq empty "$local_cfg" 2>/dev/null; then
+    jq -r -s ".[0] * .[1] | $filter" "$base_cfg" "$local_cfg"
+  else
+    jq -r "$filter" "$base_cfg"
+  fi
+}
+
+# Get review loop limit from config (legacy, for backward compat)
 get_review_loop_limit() {
   local config_file="pipeline.config.json"
   if [[ -f "$config_file" ]]; then
@@ -121,12 +147,28 @@ get_review_loop_limit() {
   fi
 }
 
+# Get plan review limit (separate from code review)
+get_plan_review_limit() {
+  get_config_value '.autonomy.planReviewLoopLimit // .autonomy.reviewLoopLimit // 3'
+}
+
+# Get code review limit (separate from plan review)
+get_code_review_limit() {
+  get_config_value '.autonomy.codeReviewLoopLimit // .autonomy.reviewLoopLimit // 5'
+}
+
 # Check if we've exceeded review loop limit
+# Usage: exceeded_review_limit [plan|code]
 exceeded_review_limit() {
-  local iteration
-  local limit
+  local phase="${1:-code}"
+  local iteration limit
   iteration=$(get_iteration)
-  limit=$(get_review_loop_limit)
+
+  if [[ "$phase" == "plan" ]]; then
+    limit=$(get_plan_review_limit)
+  else
+    limit=$(get_code_review_limit)
+  fi
 
   [[ $iteration -ge $limit ]] && echo "1" || echo "0"
 }

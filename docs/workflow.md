@@ -182,6 +182,69 @@ idle -> plan_drafting -> plan_refining -> plan_reviewing ->
 
 ---
 
+## Orchestrator Safety Features
+
+### Atomic Locking
+
+The orchestrator uses PID-based locking to prevent concurrent execution:
+
+- Lock file: `.task/.orchestrator.lock`
+- Contains PID of running orchestrator
+- Stale locks (dead PID) are automatically cleaned up
+- Both `run` and `reset` commands require the lock
+
+```bash
+# If you see "Another orchestrator is running" but it's stale:
+rm .task/.orchestrator.lock
+```
+
+### Dry-Run Validation
+
+Validate setup before running:
+
+```bash
+./scripts/orchestrator.sh dry-run
+```
+
+Checks:
+- `.task/` directory exists
+- `state.json` valid (or will be created)
+- `pipeline.config.json` valid
+- Required scripts executable
+- Required docs exist
+- `.task` in `.gitignore`
+- CLI tools available
+
+### Phase-Aware Recovery
+
+The recovery tool respects which phase failed:
+
+- Errors in `plan_refining`/`plan_reviewing` → retry from `plan_refining`
+- Errors in `implementing`/`reviewing`/`fixing` → retry from `implementing`
+
+```bash
+# Interactive recovery
+./scripts/recover.sh
+
+# Check previous state
+cat .task/state.json | jq '.previous_state'
+```
+
+### Local Config Overrides
+
+Create `pipeline.config.local.json` for local overrides (gitignored):
+
+```json
+{
+  "autonomy": {
+    "planReviewLoopLimit": 5,
+    "codeReviewLoopLimit": 10
+  }
+}
+```
+
+---
+
 ## Current Sprint Context
 
 Add sprint-specific context here as needed. This section is referenced by the orchestrator when starting new features.

@@ -21,8 +21,85 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Initialize state if needed
-init_state
+# Locking functions
+# Design: Uses file lock with noclobber instead of mkdir because:
+# 1. File lock allows storing PID for liveness checking
+# 2. mkdir only provides mutual exclusion, not process identification
+# 3. noclobber is atomic on POSIX systems just like mkdir
+LOCK_FILE=".task/.orchestrator.lock"
+
+get_lock_pid() {
+  [[ ! -f "$LOCK_FILE" ]] && return
+  local content
+  content=$(cat "$LOCK_FILE" 2>/dev/null)
+  [[ "$content" =~ ^[0-9]+$ ]] && echo "$content"
+}
+
+is_pid_alive() {
+  local pid="$1"
+  [[ -z "$pid" ]] && return 1
+  if kill -0 "$pid" 2>/dev/null; then
+    return 0
+  else
+    # EPERM means process exists but we can't signal - treat as alive
+    if kill -0 "$pid" 2>&1 | grep -q "Operation not permitted"; then
+      return 0
+    fi
+    return 1
+  fi
+}
+
+acquire_lock() {
+  local existing_pid
+  existing_pid=$(get_lock_pid)
+
+  if [[ -n "$existing_pid" ]]; then
+    if is_pid_alive "$existing_pid"; then
+      log_error "Another orchestrator is running (PID: $existing_pid)"
+      log_error "If this is incorrect, manually remove $LOCK_FILE"
+      return 1
+    else
+      log_warn "Removing stale lock (PID $existing_pid no longer exists)"
+      rm -f "$LOCK_FILE"
+    fi
+  fi
+
+  mkdir -p .task
+  if ( set -C; echo $$ > "$LOCK_FILE" ) 2>/dev/null; then
+    return 0
+  else
+    log_error "Failed to acquire lock (race condition)"
+    return 1
+  fi
+}
+
+release_lock() {
+  local lock_pid
+  lock_pid=$(get_lock_pid)
+  [[ "$lock_pid" == "$$" ]] && rm -f "$LOCK_FILE"
+}
+
+setup_traps() {
+  trap 'release_lock' EXIT
+  trap 'release_lock; exit 130' INT
+  trap 'release_lock; exit 143' TERM
+}
+
+# Check if auto-commit is enabled (with legacy fallback)
+should_auto_commit() {
+  local auto_commit
+  auto_commit=$(get_config_value '.autonomy.autoCommit')
+
+  if [[ "$auto_commit" != "null" && -n "$auto_commit" ]]; then
+    [[ "$auto_commit" == "true" ]] && echo "1" || echo "0"
+    return
+  fi
+
+  # Legacy fallback: approvalPoints.commit=false means auto-commit enabled
+  local legacy
+  legacy=$(get_config_value '.autonomy.approvalPoints.commit')
+  [[ "$legacy" == "false" ]] && echo "1" || echo "0"
+}
 
 # Get max retries from config
 get_max_retries() {
@@ -209,7 +286,7 @@ run_plan_review() {
         log_warn "Plan needs changes"
         increment_iteration
 
-        if [[ $(exceeded_review_limit) == "1" ]]; then
+        if [[ $(exceeded_review_limit "plan") == "1" ]]; then
           log_error "Exceeded plan review loop limit"
           set_state "error" "$plan_id"
           return 1
@@ -392,6 +469,138 @@ handle_debate() {
   fi
 }
 
+# Dry-run validation mode
+run_dry_run() {
+  local errors=0
+  local warnings=0
+
+  echo "Running dry-run validation..."
+  echo ""
+
+  # 1. Check .task/ directory
+  if [[ -d .task ]]; then
+    echo "Task directory: OK"
+  else
+    echo "Task directory: MISSING"
+    ((errors++)) || true
+  fi
+
+  # 2. Check state.json (informational)
+  if [[ -f .task/state.json ]]; then
+    if jq empty .task/state.json 2>/dev/null; then
+      local status
+      status=$(jq -r '.status // empty' .task/state.json)
+      local valid_states="idle plan_drafting plan_refining plan_reviewing planning consulting implementing reviewing fixing debating complete committing error needs_user_input"
+      if [[ -n "$status" ]] && [[ " $valid_states " =~ " $status " ]]; then
+        echo "State file: OK (status: $status)"
+      else
+        echo "State file: INVALID STATUS ($status)"
+        ((errors++)) || true
+      fi
+    else
+      echo "State file: INVALID JSON"
+      ((errors++)) || true
+    fi
+  else
+    echo "State file: MISSING (will be created on first run)"
+  fi
+
+  # 3. Check config file
+  if [[ -f pipeline.config.json ]]; then
+    if jq empty pipeline.config.json 2>/dev/null; then
+      echo "Config file: OK"
+    else
+      echo "Config file: INVALID JSON"
+      ((errors++)) || true
+    fi
+  else
+    echo "Config file: MISSING"
+    ((errors++)) || true
+  fi
+
+  # 4. Check required scripts
+  local required_scripts=("state-manager.sh" "run-claude.sh" "run-codex-review.sh" "run-claude-plan.sh" "run-codex-plan-review.sh")
+  local scripts_ok=1
+  for script in "${required_scripts[@]}"; do
+    if [[ ! -f "$SCRIPT_DIR/$script" ]]; then
+      echo "Script missing: $script"
+      scripts_ok=0
+      ((errors++)) || true
+    elif [[ ! -x "$SCRIPT_DIR/$script" ]]; then
+      echo "Script not executable: $script"
+      scripts_ok=0
+      ((errors++)) || true
+    fi
+  done
+  [[ $scripts_ok -eq 1 ]] && echo "Scripts: OK"
+
+  # 5. Check required docs
+  if [[ -f docs/standards.md ]]; then
+    echo "docs/standards.md: OK"
+  else
+    echo "docs/standards.md: MISSING"
+    ((errors++)) || true
+  fi
+
+  if [[ -f docs/workflow.md ]]; then
+    echo "docs/workflow.md: OK"
+  else
+    echo "docs/workflow.md: MISSING"
+    ((errors++)) || true
+  fi
+
+  # 6. Check .gitignore for .task
+  if [[ -f .gitignore ]] && grep -q "^\.task" .gitignore; then
+    echo ".gitignore (.task): OK"
+  else
+    echo ".gitignore (.task): WARNING - .task not in .gitignore"
+    ((warnings++)) || true
+  fi
+
+  # 7. Check CLI tools
+  if command -v jq >/dev/null 2>&1; then
+    echo "CLI jq: OK"
+  else
+    echo "CLI jq: MISSING (required)"
+    ((errors++)) || true
+  fi
+
+  if command -v claude >/dev/null 2>&1; then
+    echo "CLI claude: OK"
+  else
+    echo "CLI claude: WARNING - not found"
+    ((warnings++)) || true
+  fi
+
+  if command -v codex >/dev/null 2>&1; then
+    echo "CLI codex: OK"
+  else
+    echo "CLI codex: WARNING - not found"
+    ((warnings++)) || true
+  fi
+
+  if command -v gemini >/dev/null 2>&1; then
+    echo "CLI gemini: OK"
+  else
+    echo "CLI gemini: WARNING - not found"
+    ((warnings++)) || true
+  fi
+
+  # Summary
+  echo ""
+  if [[ $errors -eq 0 ]]; then
+    if [[ $warnings -gt 0 ]]; then
+      echo "Dry run: PASSED ($warnings warnings)"
+    else
+      echo "Dry run: PASSED"
+    fi
+    exit 0
+  else
+    echo "Dry run: FAILED ($errors errors, $warnings warnings)"
+    exit 1
+  fi
+}
+
 # Complete task
 complete_task() {
   local task_id
@@ -403,10 +612,7 @@ complete_task() {
   reset_error_retry
 
   # Check autonomy mode for auto-commit
-  local commit_approval
-  commit_approval=$(jq -r '.autonomy.approvalPoints.commit // true' pipeline.config.json)
-
-  if [[ "$commit_approval" == "false" ]]; then
+  if [[ $(should_auto_commit) == "1" ]]; then
     log_info "Auto-commit enabled, committing changes..."
     set_state "committing" "$task_id"
     # git add . && git commit -m "feat($task_id): implemented task"
@@ -509,24 +715,37 @@ main_loop() {
 # Entry point
 case "${1:-run}" in
   run)
+    if ! acquire_lock; then exit 1; fi
+    setup_traps
+    init_state
     log_info "Starting orchestrator..."
     main_loop
     ;;
   status)
+    if ! check_state_readable; then exit 1; fi
     echo "Current state: $(get_status)"
     echo "Task ID: $(get_task_id)"
     echo "Iteration: $(get_iteration)"
     ;;
   reset)
+    if ! acquire_lock; then
+      log_error "Cannot reset while another orchestrator is running"
+      exit 1
+    fi
+    setup_traps
     log_warn "Resetting pipeline state..."
+    init_state
     set_state "idle" ""
     rm -f .task/impl-result.json .task/review-result.json .task/debate.json
     rm -f .task/plan.json .task/plan-refined.json .task/plan-review.json
     rm -f .task/current-task.json
     log_success "Pipeline reset to idle"
     ;;
+  dry-run|--dry-run)
+    run_dry_run
+    ;;
   *)
-    echo "Usage: $0 {run|status|reset}"
+    echo "Usage: $0 {run|status|reset|dry-run}"
     exit 1
     ;;
 esac

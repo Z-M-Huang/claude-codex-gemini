@@ -48,12 +48,29 @@ retry_current() {
   status=$(get_status)
   local task_id
   task_id=$(get_task_id)
+  local previous_state
+  previous_state=$(get_previous_state)
 
   case "$status" in
     error)
-      echo -e "${YELLOW}Retrying from implementing...${NC}"
-      set_state "implementing" "$task_id"
-      rm -f .task/impl-result.json .task/review-result.json
+      # Phase-aware retry based on where the error occurred
+      case "$previous_state" in
+        plan_refining|plan_reviewing)
+          echo -e "${YELLOW}Retrying from plan refinement (failed in: $previous_state)...${NC}"
+          set_state "plan_refining" "$task_id"
+          rm -f .task/plan-refined.json .task/plan-review.json
+          ;;
+        implementing|reviewing|fixing|"")
+          echo -e "${YELLOW}Retrying from implementing (failed in: ${previous_state:-unknown})...${NC}"
+          set_state "implementing" "$task_id"
+          rm -f .task/impl-result.json .task/review-result.json
+          ;;
+        *)
+          echo -e "${YELLOW}Unknown previous state ($previous_state), defaulting to implementing...${NC}"
+          set_state "implementing" "$task_id"
+          rm -f .task/impl-result.json .task/review-result.json
+          ;;
+      esac
       ;;
     fixing)
       echo -e "${YELLOW}Retrying fix...${NC}"

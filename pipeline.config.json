@@ -9,8 +9,11 @@
       "review": false,
       "commit": true
     },
+    "autoCommit": false,
     "maxAutoRetries": 3,
-    "reviewLoopLimit": 5
+    "reviewLoopLimit": 5,
+    "planReviewLoopLimit": 3,
+    "codeReviewLoopLimit": 5
   },
 
   "models": {

@@ -281,6 +281,22 @@ cat .task/plan-review.json | jq '.status'
 ./scripts/orchestrator.sh status
 ```
 
+### Dry Run (Validation)
+
+Validate your pipeline setup without running it:
+
+```bash
+./scripts/orchestrator.sh dry-run
+```
+
+This checks:
+- `.task/` directory and state file validity
+- `pipeline.config.json` validity
+- Required scripts present and executable
+- Required docs (`standards.md`, `workflow.md`)
+- `.task` in `.gitignore`
+- CLI tools (`jq` required, `claude`/`codex`/`gemini` optional)
+
 ### Recovery
 
 ```bash
@@ -313,14 +329,32 @@ cat .task/impl-result.json | jq '.questions'   # Implementation questions
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `autonomy.mode` | `autonomous`, `semi-autonomous`, `supervised` | `semi-autonomous` |
-| `autonomy.reviewLoopLimit` | Max review iterations | `5` |
+| `autonomy.reviewLoopLimit` | Max review iterations (legacy, fallback) | `5` |
+| `autonomy.planReviewLoopLimit` | Max plan review iterations | `3` |
+| `autonomy.codeReviewLoopLimit` | Max code review iterations | `5` |
+| `autonomy.autoCommit` | Auto-commit on approval | `false` |
 | `errorHandling.autoResolveAttempts` | Retries before pausing | `3` |
 | `models.coder.model` | Claude model | `claude-opus-4.5` |
 | `models.reviewer.model` | Codex model | `gpt-5.2` |
 | `debate.enabled` | Allow Gemini to challenge reviews | `true` |
 | `debate.maxRounds` | Max debate rounds | `2` |
 
-> **Note (MVP):** Auto-commit and branch strategy settings are defined in config but not yet implemented. Currently all commits are manual.
+> **Note (MVP):** Branch strategy settings are defined in config but not yet implemented. Auto-commit is controlled by `autonomy.autoCommit`.
+
+### Local Config Overrides
+
+Create `pipeline.config.local.json` to override settings without modifying the tracked config:
+
+```json
+{
+  "autonomy": {
+    "planReviewLoopLimit": 5,
+    "codeReviewLoopLimit": 10
+  }
+}
+```
+
+This file is gitignored and will be merged on top of `pipeline.config.json`.
 
 ### Autonomy Modes
 
