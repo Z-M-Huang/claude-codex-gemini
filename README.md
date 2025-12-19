@@ -6,6 +6,8 @@ A development pipeline that orchestrates multiple AI agents to plan, implement, 
 - **Claude Code** - Plan Refiner + Implementation Coder
 - **Codex CLI** - Plan Reviewer + Code Reviewer
 
+> **Just want to run CC + Codex?** Check out [claude-codex](https://github.com/Z-M-Huang/claude-codex).
+
 ## How It Works
 
 ### Phase 1: Planning
