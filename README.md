@@ -9,6 +9,7 @@ A development pipeline that orchestrates multiple AI agents to plan, implement, 
 ## How It Works
 
 ### Phase 1: Planning
+
 ```
 User Request → Gemini (draft plan) → Claude (refine plan) → Codex (review plan)
                                            ↑                       ↓
@@ -20,6 +21,7 @@ User Request → Gemini (draft plan) → Claude (refine plan) → Codex (review 
 ```
 
 ### Phase 2: Implementation
+
 ```
 Task → Claude (implement) → Codex (review code) → approved → commit
               ↑                     ↓
@@ -50,6 +52,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
 ### Option A: Use as Template (New Projects)
 
 1. **Clone/copy this repository:**
+
    ```bash
    git clone https://github.com/Z-M-Huang/claude-codex-gemini.git my-project
    cd my-project
@@ -58,6 +61,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
    ```
 
 2. **Customize for your project:**
+
    ```bash
    # Edit standards to match your project
    vim docs/standards.md
@@ -70,6 +74,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
    ```
 
 3. **Initialize the pipeline:**
+
    ```bash
    ./scripts/state-manager.sh init
 
@@ -78,6 +83,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
    ```
 
 4. **Create your first plan:**
+
    ```bash
    # Create a plan file (or let Gemini create it)
    cat > .task/plan.json << 'EOF'
@@ -93,6 +99,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
    ```
 
 5. **Run the planning phase:**
+
    ```bash
    ./scripts/state-manager.sh set plan_refining plan-001
    ./scripts/orchestrator.sh
@@ -108,6 +115,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
 ### Option B: Adopt for Existing Projects
 
 1. **Copy the pipeline files to your project:**
+
    ```bash
    # From the claude-codex-gemini directory
    cp -r scripts/ /path/to/your/project/
@@ -118,6 +126,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
    ```
 
 2. **Add to .gitignore:**
+
    ```bash
    echo ".task/" >> /path/to/your/project/.gitignore
    ```
@@ -125,6 +134,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
 3. **Customize docs/standards.md for your project:**
 
    Update the coding standards to match your existing conventions:
+
    - Naming conventions (files, classes, functions)
    - Code style rules
    - Testing requirements
@@ -133,8 +143,10 @@ Task → Claude (implement) → Codex (review code) → approved → commit
 4. **Update the agent config files:**
 
    Edit `GEMINI.md`, `CLAUDE.md`, and `AGENTS.md` to reference your project-specific context:
+
    ```markdown
    # In GEMINI.md, add project-specific imports
+
    @docs/your-project-docs.md
    @src/README.md
    ```
@@ -142,6 +154,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
 5. **Configure the pipeline:**
 
    Edit `pipeline.config.json`:
+
    ```json
    {
      "autonomy": {
@@ -172,11 +185,13 @@ git update-index --skip-worktree .task/state.json .task/tasks.json
 This tells git to ignore your local modifications to these files. The `.gitignore` already excludes new files in `.task/` (like `impl-result.json`, `review-result.json`, error logs).
 
 **To check skip-worktree status:**
+
 ```bash
 git ls-files -v .task/ | grep '^S'  # S = skip-worktree is set
 ```
 
 **To undo (if you need to commit changes):**
+
 ```bash
 git update-index --no-skip-worktree .task/state.json
 ```
@@ -290,6 +305,7 @@ Validate your pipeline setup without running it:
 ```
 
 This checks:
+
 - `.task/` directory and state file validity
 - `pipeline.config.json` validity
 - Required scripts present and executable
@@ -326,18 +342,18 @@ cat .task/impl-result.json | jq '.questions'   # Implementation questions
 
 ### pipeline.config.json
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `autonomy.mode` | `autonomous`, `semi-autonomous`, `supervised` | `semi-autonomous` |
-| `autonomy.reviewLoopLimit` | Max review iterations (legacy, fallback) | `5` |
-| `autonomy.planReviewLoopLimit` | Max plan review iterations | `3` |
-| `autonomy.codeReviewLoopLimit` | Max code review iterations | `5` |
-| `autonomy.autoCommit` | Auto-commit on approval | `false` |
-| `errorHandling.autoResolveAttempts` | Retries before pausing | `3` |
-| `models.coder.model` | Claude model | `claude-opus-4.5` |
-| `models.reviewer.model` | Codex model | `gpt-5.2` |
-| `debate.enabled` | Allow Gemini to challenge reviews | `true` |
-| `debate.maxRounds` | Max debate rounds | `2` |
+| Setting                             | Description                                   | Default           |
+| ----------------------------------- | --------------------------------------------- | ----------------- |
+| `autonomy.mode`                     | `autonomous`, `semi-autonomous`, `supervised` | `semi-autonomous` |
+| `autonomy.reviewLoopLimit`          | Max review iterations (legacy, fallback)      | `5`               |
+| `autonomy.planReviewLoopLimit`      | Max plan review iterations                    | `3`               |
+| `autonomy.codeReviewLoopLimit`      | Max code review iterations                    | `5`               |
+| `autonomy.autoCommit`               | Auto-commit on approval                       | `false`           |
+| `errorHandling.autoResolveAttempts` | Retries before pausing                        | `3`               |
+| `models.coder.model`                | Claude model                                  | `claude-opus-4.5` |
+| `models.reviewer.model`             | Codex model                                   | `gpt-5.2`         |
+| `debate.enabled`                    | Allow Gemini to challenge reviews             | `true`            |
+| `debate.maxRounds`                  | Max debate rounds                             | `2`               |
 
 > **Note (MVP):** Branch strategy settings are defined in config but not yet implemented. Auto-commit is controlled by `autonomy.autoCommit`.
 
@@ -358,11 +374,11 @@ This file is gitignored and will be merged on top of `pipeline.config.json`.
 
 ### Autonomy Modes
 
-| Mode | Planning | Implementation | Review | Commit |
-|------|----------|----------------|--------|--------|
-| `autonomous` | Auto | Auto | Auto | Auto |
-| `semi-autonomous` | Auto | Auto | Auto | **Manual** |
-| `supervised` | Manual | Manual | Manual | Manual |
+| Mode              | Planning | Implementation | Review | Commit     |
+| ----------------- | -------- | -------------- | ------ | ---------- |
+| `autonomous`      | Auto     | Auto           | Auto   | Auto       |
+| `semi-autonomous` | Auto     | Auto           | Auto   | **Manual** |
+| `supervised`      | Manual   | Manual         | Manual | Manual     |
 
 ## Customization
 
@@ -374,12 +390,15 @@ Edit `docs/standards.md`:
 # Project Standards
 
 ## Coding Standards
+
 - Use TypeScript strict mode
 - All functions must have JSDoc comments
 - No console.log in production code
 
 ## Review Checklist
+
 ### Must Check (severity: error)
+
 - No hardcoded secrets
 - All API endpoints have auth middleware
 - Database queries use parameterized statements
@@ -413,6 +432,7 @@ Edit `docs/schemas/review-result.schema.json` to add custom checklist items:
 ### Claude not creating output file
 
 Check that Claude has the right permissions:
+
 ```bash
 # Verify CLAUDE.md instructions mention the output file
 grep "impl-result.json" CLAUDE.md
@@ -421,6 +441,7 @@ grep "impl-result.json" CLAUDE.md
 ### Codex review failing
 
 Verify the schema is valid:
+
 ```bash
 jq empty docs/schemas/review-result.schema.json
 ```
@@ -434,4 +455,4 @@ cat .task/errors/error-*.json | jq
 
 ## License
 
-MIT
+GPL-3.0 license
