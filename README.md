@@ -74,7 +74,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
    ./scripts/state-manager.sh init
 
    # Tell git to ignore local changes to state files
-   git update-index --skip-worktree .task/state.json .task/tasks.json .task/current-task.json.example
+   git update-index --skip-worktree .task/state.json .task/tasks.json
    ```
 
 4. **Create your first plan:**
@@ -166,7 +166,7 @@ Task → Claude (implement) → Codex (review code) → approved → commit
 The `.task/` folder contains initial state files that are tracked in git but should not have local changes committed. After cloning, run:
 
 ```bash
-git update-index --skip-worktree .task/state.json .task/tasks.json .task/current-task.json.example
+git update-index --skip-worktree .task/state.json .task/tasks.json
 ```
 
 This tells git to ignore your local modifications to these files. The `.gitignore` already excludes new files in `.task/` (like `impl-result.json`, `review-result.json`, error logs).
@@ -319,6 +319,8 @@ cat .task/impl-result.json | jq '.questions'   # Implementation questions
 | `models.reviewer.model` | Codex model | `gpt-5.2` |
 | `debate.enabled` | Allow Gemini to challenge reviews | `true` |
 | `debate.maxRounds` | Max debate rounds | `2` |
+
+> **Note (MVP):** Auto-commit and branch strategy settings are defined in config but not yet implemented. Currently all commits are manual.
 
 ### Autonomy Modes
 
