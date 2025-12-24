@@ -38,16 +38,63 @@ Gemini (draft) -> Claude (refine) -> Codex (review) ->
 
 ---
 
+## Internal Reviews (Cost Optimization)
+
+Before calling Codex (expensive external API), run parallel internal reviews:
+
+### Internal Review Agents
+
+| Agent | Model | Focus |
+|-------|-------|-------|
+| `code-reviewer-sonnet` | Sonnet | Fast correctness check |
+| `code-reviewer-opus` | Opus | Deep architecture analysis |
+| `security-reviewer-sonnet` | Sonnet | OWASP Top 10, secrets |
+| `security-reviewer-opus` | Opus | Threat modeling, subtle vulns |
+| `test-reviewer-sonnet` | Sonnet | Test existence, execution |
+| `test-reviewer-opus` | Opus | Coverage quality, edge cases |
+
+### Internal Review Flow
+
+```
+Claude output -> Internal Reviews (6 parallel) -> All pass? -> Codex
+                         |                            |
+                         v                            v
+                    Any fail? ---------> Claude fixes -> re-run internal
+```
+
+### Running Internal Reviews
+
+```bash
+# Run all 6 reviewers in parallel
+./scripts/run-internal-reviews.sh
+
+# Check results
+cat .task/internal-review-summary.json
+```
+
+### Output Files
+
+- `.task/internal-review-code-sonnet.json`
+- `.task/internal-review-code-opus.json`
+- `.task/internal-review-security-sonnet.json`
+- `.task/internal-review-security-opus.json`
+- `.task/internal-review-test-sonnet.json`
+- `.task/internal-review-test-opus.json`
+- `.task/internal-review-summary.json` (aggregated)
+
+---
+
 ## Phase 2: Implementation (After Plan Approved)
 
 ### Gemini (Orchestrator)
 1. Create task in `.task/current-task.json` from approved plan
 2. Set state to `implementing`
 3. Invoke Claude for implementation
-4. Invoke Codex for code review
-5. Handle review loop (max: reviewLoopLimit)
-6. Optional: Debate with Codex on questionable issues
-7. Commit on approval (based on autonomy mode)
+4. **Run internal reviews** (6 parallel subagents)
+5. If internal reviews pass, invoke Codex for external code review
+6. Handle review loop (max: reviewLoopLimit)
+7. Optional: Debate with Codex on questionable issues
+8. Commit on approval (based on autonomy mode)
 
 ### Claude (Coder)
 1. Read `.task/current-task.json`

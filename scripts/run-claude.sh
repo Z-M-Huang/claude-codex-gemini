@@ -39,6 +39,7 @@ Implement the task following the standards above. Write your output to .task/imp
 
 # Execute Claude
 claude -p "$PROMPT" \
+  --continue \
   --output-format json \
   --allowedTools "Read,Write,Edit,Bash,Glob,Grep" \
   --permission-mode acceptEdits

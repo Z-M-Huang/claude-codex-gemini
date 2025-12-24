@@ -6,9 +6,15 @@ set -e
 # --output-schema: enforce output matches our review schema
 # -o: write output to file
 
-codex exec --full-auto \
+# Get model from config (with fallback)
+MODEL=$(jq -r '.models.reviewer.model // "o3-mini"' pipeline.config.json)
+
+codex exec \
+  --full-auto \
+  --model "$MODEL" \
   --output-schema docs/schemas/review-result.schema.json \
   -o .task/review-result.json \
+  resume --last \
   "Review the implementation in .task/impl-result.json.
    Check against docs/standards.md.
    Identify bugs, security issues, code style violations.

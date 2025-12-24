@@ -20,15 +20,24 @@ You are the coordinator of a multi-AI development pipeline. **You do NOT write c
 ## Workflow Overview
 
 ```
-User Request -> You (draft plan) -> Claude (refine) -> Codex (review plan) ->
-                                         ^                    |
-                                         +--- needs changes --+
-                                                              |
-                                                        approved
-                                                              |
-                                                              v
-                   Claude (implement) -> Codex (review code) -> commit
+User Request -> You (draft plan) -> Claude (refine) -> Internal Reviews -> Codex (review plan)
+                                         ^                                        |
+                                         +------------- needs changes ------------+
+                                                                                  |
+                                                                            approved
+                                                                                  |
+                                                                                  v
+                   Claude (implement) -> Internal Reviews -> Codex (review code) -> commit
 ```
+
+### Internal Reviews (Cost Optimization)
+
+Before calling Codex (external API), run **parallel internal reviews** using Claude subagents:
+- `code-reviewer-sonnet` + `code-reviewer-opus` (fast + deep code review)
+- `security-reviewer-sonnet` + `security-reviewer-opus` (fast + deep security)
+- `test-reviewer-sonnet` + `test-reviewer-opus` (fast + deep test coverage)
+
+This catches issues early and reduces Codex API calls by ~90%.
 
 ## Phase 1: Planning
 
@@ -76,6 +85,65 @@ Once plan is approved by Codex:
 # Start implementation
 ./scripts/orchestrator.sh
 ```
+
+## Internal Reviews (Run Before Codex)
+
+### Why Internal Reviews?
+- **Cost savings**: 6 Claude subagents are cheaper than repeated Codex calls
+- **Faster iteration**: Internal loop catches issues before external review
+- **Comprehensive coverage**: Code, security, and test coverage in parallel
+
+### Running Internal Reviews
+
+Before calling Codex for external review, run internal reviews:
+
+```bash
+# Run all 6 internal reviewers in parallel
+./scripts/run-internal-reviews.sh
+
+# Check if all passed
+cat .task/internal-review-summary.json | jq '.all_passed'
+```
+
+### Internal Review Flow
+
+```
+Claude output -> run-internal-reviews.sh -> All pass? -> Codex external review
+                        |                       |
+                        v                       v
+                   Any fail? ----------> Claude fixes -> re-run internal
+```
+
+### Manual Internal Review (Individual Agents)
+
+If you need to run specific reviewers:
+```bash
+# Using Claude's Task tool with specific agents
+# These run in .claude/agents/ directory
+
+# Code reviewers (run both in parallel)
+claude task code-reviewer-sonnet
+claude task code-reviewer-opus
+
+# Security reviewers (run both in parallel)
+claude task security-reviewer-sonnet
+claude task security-reviewer-opus
+
+# Test reviewers (run both in parallel)
+claude task test-reviewer-sonnet
+claude task test-reviewer-opus
+```
+
+### Internal Review Output Files
+
+All internal reviews write to `.task/`:
+- `internal-review-code-sonnet.json`
+- `internal-review-code-opus.json`
+- `internal-review-security-sonnet.json`
+- `internal-review-security-opus.json`
+- `internal-review-test-sonnet.json`
+- `internal-review-test-opus.json`
+- `internal-review-summary.json` (aggregated results)
 
 ## Phase 2: Implementation
 

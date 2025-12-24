@@ -87,6 +87,7 @@ Only use needs_clarification for blocking questions that prevent you from creati
 
 # Execute Claude
 claude -p "$PROMPT" \
+  --continue \
   --output-format json \
   --allowedTools "Read,Write,Edit,Glob,Grep" \
   --permission-mode acceptEdits

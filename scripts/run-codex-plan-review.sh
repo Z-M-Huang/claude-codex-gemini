@@ -4,6 +4,9 @@ set -e
 # Run Codex to review the refined plan
 # Uses structured output for consistent review format
 
+# Get model from config (with fallback)
+MODEL=$(jq -r '.models.reviewer.model // "o3-mini"' pipeline.config.json)
+
 STANDARDS=$(cat docs/standards.md)
 WORKFLOW=$(cat docs/workflow.md)
 PLAN=$(cat .task/plan-refined.json)
@@ -59,9 +62,12 @@ Decision rules:
 - Only 'suggestion' concerns -> status: approved"
 
 # Execute Codex with schema enforcement
-codex exec --full-auto \
+codex exec \
+  --full-auto \
+  --model "$MODEL" \
   --output-schema docs/schemas/plan-review.schema.json \
   -o .task/plan-review.json \
+  resume --last \
   "$PROMPT"
 
 # Verify output file was created and is valid JSON
