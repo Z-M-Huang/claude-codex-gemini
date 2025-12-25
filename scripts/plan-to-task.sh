@@ -69,6 +69,9 @@ if ! jq empty .task/current-task.json 2>/dev/null; then
   exit 1
 fi
 
+# Clear Codex session marker so first code review starts fresh
+rm -f .task/.codex-session-active
+
 # Update state
 set_state "implementing" "$TASK_ID"
 reset_iteration

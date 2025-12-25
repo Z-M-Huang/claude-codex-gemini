@@ -739,6 +739,7 @@ case "${1:-run}" in
     rm -f .task/impl-result.json .task/review-result.json .task/debate.json
     rm -f .task/plan.json .task/plan-refined.json .task/plan-review.json
     rm -f .task/current-task.json
+    rm -f .task/.codex-session-active  # Clear Codex session marker
     log_success "Pipeline reset to idle"
     ;;
   dry-run|--dry-run)

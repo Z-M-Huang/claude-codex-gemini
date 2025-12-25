@@ -286,6 +286,51 @@ Create `pipeline.config.local.json` for local overrides (gitignored):
 
 ---
 
+## Codex Session Resume
+
+Codex reviews use `resume --last` for subsequent reviews to save tokens, with an updated prompt that includes changes since last review.
+
+### How It Works
+
+- **First review** (new task): Full prompt with all context (standards, workflow, etc.)
+- **Subsequent reviews**: Uses `resume --last` + shorter prompt with changes summary
+
+### Session Tracking
+
+Uses `.task/.codex-session-active` marker file:
+- Created after first successful Codex call
+- Cleared when entering `plan_drafting` (new task), after plan approval (plan-to-task.sh), or via reset
+
+This ensures:
+- Plan reviews: first is fresh, subsequent use resume
+- Code reviews: first is fresh (marker cleared after plan approved), subsequent use resume
+
+### Plan Reviews (Subsequent)
+
+```
+## IMPORTANT: This is a follow-up review
+
+The plan has been UPDATED based on your previous feedback.
+Please re-read and re-review the refined plan below.
+
+[Updated plan content]
+```
+
+### Code Reviews (Subsequent)
+
+```
+## IMPORTANT: This is a follow-up review
+
+The implementation has been UPDATED based on your previous feedback.
+
+### Files Changed Since Last Review:
+[List of changed files from git diff or impl-result.json]
+
+Please re-review focusing on the changed files.
+```
+
+---
+
 ## Current Sprint Context
 
 Add sprint-specific context here as needed. This section is referenced by the orchestrator when starting new features.

@@ -40,6 +40,7 @@ reset_to_idle() {
   echo -e "${YELLOW}Resetting pipeline to idle...${NC}"
   set_state "idle" ""
   rm -f .task/impl-result.json .task/review-result.json .task/debate.json
+  rm -f .task/.codex-session-active  # Clear Codex session marker
   echo -e "${GREEN}Pipeline reset to idle${NC}"
 }
 
