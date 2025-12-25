@@ -40,23 +40,21 @@ Gemini (draft) -> Claude (refine) -> Codex (review) ->
 
 ## Internal Reviews (Cost Optimization)
 
-Before calling Codex (expensive external API), run parallel internal reviews:
+Before calling Codex (expensive external API), run parallel internal reviews with 2 unified reviewers:
 
 ### Internal Review Agents
 
 | Agent | Model | Focus |
 |-------|-------|-------|
-| `code-reviewer-sonnet` | Sonnet | Fast correctness check |
-| `code-reviewer-opus` | Opus | Deep architecture analysis |
-| `security-reviewer-sonnet` | Sonnet | OWASP Top 10, secrets |
-| `security-reviewer-opus` | Opus | Threat modeling, subtle vulns |
-| `test-reviewer-sonnet` | Sonnet | Test existence, execution |
-| `test-reviewer-opus` | Opus | Coverage quality, edge cases |
+| `reviewer-sonnet` | Sonnet | Fast, practical: code + security + tests |
+| `reviewer-opus` | Opus | Deep, thorough: architecture + vulnerabilities + test quality |
+
+Each unified reviewer covers all three areas (code, security, tests) in a single pass, reducing complexity while maintaining comprehensive coverage.
 
 ### Internal Review Flow
 
 ```
-Claude output -> Internal Reviews (6 parallel) -> All pass? -> Codex
+Claude output -> Internal Reviews (2 parallel) -> All pass? -> Codex
                          |                            |
                          v                            v
                     Any fail? ---------> Claude fixes -> re-run internal
@@ -65,7 +63,7 @@ Claude output -> Internal Reviews (6 parallel) -> All pass? -> Codex
 ### Running Internal Reviews
 
 ```bash
-# Run all 6 reviewers in parallel
+# Run both unified reviewers in parallel
 ./scripts/run-internal-reviews.sh
 
 # Check results
@@ -74,12 +72,8 @@ cat .task/internal-review-summary.json
 
 ### Output Files
 
-- `.task/internal-review-code-sonnet.json`
-- `.task/internal-review-code-opus.json`
-- `.task/internal-review-security-sonnet.json`
-- `.task/internal-review-security-opus.json`
-- `.task/internal-review-test-sonnet.json`
-- `.task/internal-review-test-opus.json`
+- `.task/internal-review-sonnet.json`
+- `.task/internal-review-opus.json`
 - `.task/internal-review-summary.json` (aggregated)
 
 ---
@@ -90,7 +84,7 @@ cat .task/internal-review-summary.json
 1. Create task in `.task/current-task.json` from approved plan
 2. Set state to `implementing`
 3. Invoke Claude for implementation
-4. **Run internal reviews** (6 parallel subagents)
+4. **Run internal reviews** (2 parallel unified subagents)
 5. If internal reviews pass, invoke Codex for external code review
 6. Handle review loop (max: reviewLoopLimit)
 7. Optional: Debate with Codex on questionable issues

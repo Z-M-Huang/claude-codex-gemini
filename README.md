@@ -25,17 +25,16 @@ User Request → Gemini (draft plan) → Claude (refine plan) → Codex (review 
 ### Phase 2: Implementation
 
 ```
-Task → Claude (implement) → Internal Reviews (6 parallel) → Codex (review code) → commit
+Task → Claude (implement) → Internal Reviews (2 parallel) → Codex (review code) → commit
               ↑                      |                              ↓
               └──────────────────────+────── fix ←─── needs changes ┘
 ```
 
 ### Internal Reviews (Cost Optimization)
 
-Before calling Codex, 6 Claude subagents review in parallel:
-- **Code**: `code-reviewer-sonnet` + `code-reviewer-opus`
-- **Security**: `security-reviewer-sonnet` + `security-reviewer-opus`
-- **Tests**: `test-reviewer-sonnet` + `test-reviewer-opus`
+Before calling Codex, 2 unified Claude subagents review in parallel:
+- **Sonnet**: `reviewer-sonnet` - Fast, practical (code + security + tests)
+- **Opus**: `reviewer-opus` - Deep, thorough (architecture + vulnerabilities + test quality)
 
 This catches ~90% of issues before external API calls, significantly reducing costs.
 
@@ -217,12 +216,8 @@ your-project/
 ├── AGENTS.md                 # Codex reviewer instructions
 ├── .claude/
 │   └── agents/               # Internal review subagents
-│       ├── code-reviewer-sonnet.md
-│       ├── code-reviewer-opus.md
-│       ├── security-reviewer-sonnet.md
-│       ├── security-reviewer-opus.md
-│       ├── test-reviewer-sonnet.md
-│       └── test-reviewer-opus.md
+│       ├── reviewer-sonnet.md    # Fast unified review (code + security + tests)
+│       └── reviewer-opus.md      # Deep unified review (architecture + vulnerabilities)
 ├── docs/
 │   ├── standards.md          # Coding + review standards
 │   ├── workflow.md           # Process documentation
@@ -235,7 +230,7 @@ your-project/
 │   ├── run-claude-plan.sh    # Claude plan refinement executor
 │   ├── run-codex-review.sh   # Codex code review executor
 │   ├── run-codex-plan-review.sh  # Codex plan review executor
-│   ├── run-internal-reviews.sh   # Parallel internal reviews (6 agents)
+│   ├── run-internal-reviews.sh   # Parallel internal reviews (2 unified agents)
 │   ├── plan-to-task.sh       # Convert approved plan to task
 │   ├── state-manager.sh      # State management
 │   ├── error-handler.sh      # Error logging

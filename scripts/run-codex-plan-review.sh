@@ -67,7 +67,6 @@ codex exec \
   --model "$MODEL" \
   --output-schema docs/schemas/plan-review.schema.json \
   -o .task/plan-review.json \
-  resume --last \
   "$PROMPT"
 
 # Verify output file was created and is valid JSON

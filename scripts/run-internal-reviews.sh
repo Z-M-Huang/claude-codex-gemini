@@ -1,6 +1,7 @@
 #!/bin/bash
-# Run all internal reviews in parallel before escalating to Codex
+# Run internal reviews in parallel before escalating to Codex
 # This reduces API costs by catching issues early with Claude subagents
+# Uses 2 unified reviewers (sonnet + opus) covering code, security, and tests
 
 set -e
 
@@ -30,10 +31,9 @@ fi
 # Clean up previous internal review results
 rm -f .task/internal-review-*.json
 
-log_info "Running 6 internal reviewers in parallel..."
-log_info "  - code-reviewer-sonnet + code-reviewer-opus"
-log_info "  - security-reviewer-sonnet + security-reviewer-opus"
-log_info "  - test-reviewer-sonnet + test-reviewer-opus"
+log_info "Running 2 unified reviewers in parallel..."
+log_info "  - reviewer-sonnet (fast, practical: code + security + tests)"
+log_info "  - reviewer-opus (deep, thorough: architecture + vulnerabilities + test quality)"
 echo ""
 
 # Create temp directory for exit codes (Bash 3.2 + macOS/BSD compatible)
@@ -55,27 +55,15 @@ run_reviewer() {
   fi
 }
 
-# Run all reviewers in background
-run_reviewer "code-reviewer-sonnet" &
-PID_CODE_SONNET=$!
+# Run both reviewers in background
+run_reviewer "reviewer-sonnet" &
+PID_SONNET=$!
 
-run_reviewer "code-reviewer-opus" &
-PID_CODE_OPUS=$!
-
-run_reviewer "security-reviewer-sonnet" &
-PID_SECURITY_SONNET=$!
-
-run_reviewer "security-reviewer-opus" &
-PID_SECURITY_OPUS=$!
-
-run_reviewer "test-reviewer-sonnet" &
-PID_TEST_SONNET=$!
-
-run_reviewer "test-reviewer-opus" &
-PID_TEST_OPUS=$!
+run_reviewer "reviewer-opus" &
+PID_OPUS=$!
 
 # Wait for all background jobs (ignore exit codes here, check via temp files)
-log_info "Waiting for all reviewers to complete..."
+log_info "Waiting for reviewers to complete..."
 wait || true
 
 # Check exit codes from temp files
@@ -93,45 +81,17 @@ check_result() {
 # Collect results
 all_passed=true
 
-if check_result "code-reviewer-sonnet"; then
-  log_success "code-reviewer-sonnet: PASSED"
+if check_result "reviewer-sonnet"; then
+  log_success "reviewer-sonnet: PASSED"
 else
-  log_error "code-reviewer-sonnet: FAILED"
+  log_error "reviewer-sonnet: FAILED"
   all_passed=false
 fi
 
-if check_result "code-reviewer-opus"; then
-  log_success "code-reviewer-opus: PASSED"
+if check_result "reviewer-opus"; then
+  log_success "reviewer-opus: PASSED"
 else
-  log_error "code-reviewer-opus: FAILED"
-  all_passed=false
-fi
-
-if check_result "security-reviewer-sonnet"; then
-  log_success "security-reviewer-sonnet: PASSED"
-else
-  log_error "security-reviewer-sonnet: FAILED"
-  all_passed=false
-fi
-
-if check_result "security-reviewer-opus"; then
-  log_success "security-reviewer-opus: PASSED"
-else
-  log_error "security-reviewer-opus: FAILED"
-  all_passed=false
-fi
-
-if check_result "test-reviewer-sonnet"; then
-  log_success "test-reviewer-sonnet: PASSED"
-else
-  log_error "test-reviewer-sonnet: FAILED"
-  all_passed=false
-fi
-
-if check_result "test-reviewer-opus"; then
-  log_success "test-reviewer-opus: PASSED"
-else
-  log_error "test-reviewer-opus: FAILED"
+  log_error "reviewer-opus: FAILED"
   all_passed=false
 fi
 
@@ -139,12 +99,8 @@ echo ""
 
 # Check that all required output files exist
 REQUIRED_FILES=(
-  ".task/internal-review-code-sonnet.json"
-  ".task/internal-review-code-opus.json"
-  ".task/internal-review-security-sonnet.json"
-  ".task/internal-review-security-opus.json"
-  ".task/internal-review-test-sonnet.json"
-  ".task/internal-review-test-opus.json"
+  ".task/internal-review-sonnet.json"
+  ".task/internal-review-opus.json"
 )
 
 missing_files=()
