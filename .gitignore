@@ -2,3 +2,7 @@
 review/
 *.log
 pipeline.config.local.json
+node_modules/
+nul
+.codex-session-*
+test-workspace/
