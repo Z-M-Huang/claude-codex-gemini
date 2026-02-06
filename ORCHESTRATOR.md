@@ -344,7 +344,7 @@ If the pipeline gets stuck or state becomes inconsistent:
 
 Reference these for standards and workflow details:
 - `.multi-ai-pipeline/docs/standards.md` - Review criteria, OWASP checklist, decision rules
-- `.multi-ai-pipeline/docs/workflow.md` - Detailed V2 architecture and file formats
+- `.multi-ai-pipeline/docs/workflow.md` - Detailed architecture and file formats
 
 ---
 

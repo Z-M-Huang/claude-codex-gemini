@@ -1,4 +1,4 @@
-# Multi-AI Development Pipeline V2
+# Multi-AI Development Pipeline
 
 A cross-platform development pipeline orchestrating Gemini, Claude, and Codex for autonomous planning, implementation, and review.
 
@@ -220,7 +220,7 @@ If a reviewer hits 10 iterations, Gemini escalates to user (likely conflicting r
 - **CLAUDE.md** - Agent context (Claude reads this)
 - **AGENTS.md** - Final gate reviewer context (Codex reads this)
 - **docs/standards.md** - Review criteria (OWASP, error handling, quality)
-- **docs/workflow.md** - Detailed V2 architecture
+- **docs/workflow.md** - Detailed architecture
 - **agents/\*.md** - Agent behavior definitions
 
 ## Session Management
@@ -236,7 +236,7 @@ Benefits:
 - Session expired: Auto-retry without resume
 - Type-scoped: Plan sessions don't affect code sessions
 
-## Differences from V1
+## Differences from V0
 
 - **No bash scripts** - All TypeScript, cross-platform
 - **No external JSON tools** - json-tool.ts handles all JSON operations natively
@@ -246,9 +246,11 @@ Benefits:
 - **Unified agent files** - All agent behavior in `agents/` directory
 - **Needs clarification** - Reviewers can pause to ask user questions
 
+> **Note:** The previous bash-based V0 version is available in the [`archive-v0`](https://github.com/Z-M-Huang/claude-codex-gemini/tree/archive-v0) branch.
+
 ## Contributing
 
-This project follows the V2 architecture. When contributing:
+When contributing:
 
 1. Use path.join() for all file paths (never string concat with '/')
 2. Test on Windows, macOS, and Linux

@@ -1,8 +1,8 @@
-# Pipeline Workflow V2
+# Pipeline Workflow
 
 ## Architecture Overview
 
-The V2 pipeline uses:
+The pipeline uses:
 - **Gemini** - Sole orchestrator (reads GEMINI.md for instructions)
 - **Claude Code** - Agent executor for requirements, planning, implementation
 - **Codex** - Final gate reviewer for plans and code

@@ -344,7 +344,7 @@ If the pipeline gets stuck or state becomes inconsistent:
 
 Reference these for standards and workflow details:
 - `@docs/standards.md` - Review criteria, OWASP checklist, decision rules
-- `@docs/workflow.md` - Detailed V2 architecture and file formats
+- `@docs/workflow.md` - Detailed architecture and file formats
 
 ---
 
