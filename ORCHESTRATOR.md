@@ -21,9 +21,9 @@ You are the orchestrator of a multi-AI development pipeline. **You do NOT write 
 
 You have exactly 3 tools available:
 
-1. **bun scripts/run-claude-code.ts** - Invoke Claude for any phase (requirements, planning, implementation)
-2. **bun scripts/run-codex.ts** - Invoke Codex for reviews (plan or code)
-3. **bun scripts/json-tool.ts** - Read/write JSON state files
+1. **bun .multi-ai-pipeline/scripts/run-claude-code.ts** - Invoke Claude for any phase (requirements, planning, implementation)
+2. **bun .multi-ai-pipeline/scripts/run-codex.ts** - Invoke Codex for reviews (plan or code)
+3. **bun .multi-ai-pipeline/scripts/json-tool.ts** - Read/write JSON state files
 
 **These are your only tools. Do not use any other commands.**
 
@@ -55,8 +55,8 @@ Check files in this order. First missing file determines the phase.
 **Objective:** Create `.task/user-story.json` with approved requirements.
 
 ```
-bun scripts/run-claude-code.ts \
-  --agent-file agents/requirements-gatherer.md \
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/requirements-gatherer.md \
   --output .task/user-story.json \
   --model opus \
   --instructions "Gather requirements from the user. User request: [USER_REQUEST]"
@@ -74,8 +74,8 @@ bun scripts/run-claude-code.ts \
 **Objective:** Create `.task/plan-refined.json` with implementation plan.
 
 ```
-bun scripts/run-claude-code.ts \
-  --agent-file agents/planner.md \
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/planner.md \
   --output .task/plan-refined.json \
   --model opus \
   --instructions "Create implementation plan. Read .task/user-story.json for requirements."
@@ -94,8 +94,8 @@ bun scripts/run-claude-code.ts \
 ### 3.1 Plan Review - Sonnet
 
 ```
-bun scripts/run-claude-code.ts \
-  --agent-file agents/plan-reviewer.md \
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/plan-reviewer.md \
   --output .task/review-sonnet.json \
   --model sonnet \
   --instructions "Review .task/plan-refined.json against .task/user-story.json. You are reviewing as Sonnet."
@@ -114,8 +114,8 @@ bun scripts/run-claude-code.ts \
 ### 3.2 Plan Review - Opus
 
 ```
-bun scripts/run-claude-code.ts \
-  --agent-file agents/plan-reviewer.md \
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/plan-reviewer.md \
   --output .task/review-opus.json \
   --model opus \
   --instructions "Review .task/plan-refined.json against .task/user-story.json. You are reviewing as Opus."
@@ -126,7 +126,7 @@ bun scripts/run-claude-code.ts \
 ### 3.3 Plan Review - Codex
 
 ```
-bun scripts/run-codex.ts --type plan
+bun .multi-ai-pipeline/scripts/run-codex.ts --type plan
 ```
 
 **Status handling:** Same as above, tracks `iterations.plan_review_codex`.
@@ -145,8 +145,8 @@ bun scripts/run-codex.ts --type plan
 **Objective:** Implement the plan, create `.task/impl-result.json`.
 
 ```
-bun scripts/run-claude-code.ts \
-  --agent-file agents/implementer.md \
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/implementer.md \
   --output .task/impl-result.json \
   --model sonnet \
   --instructions "Implement .task/plan-refined.json. Read plan and implement ALL steps without pausing."
@@ -167,8 +167,8 @@ bun scripts/run-claude-code.ts \
 ### 5.1 Code Review - Sonnet
 
 ```
-bun scripts/run-claude-code.ts \
-  --agent-file agents/code-reviewer.md \
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/code-reviewer.md \
   --output .task/code-review-sonnet.json \
   --model sonnet \
   --instructions "Review implementation. Read .task/user-story.json, .task/plan-refined.json, and .task/impl-result.json. You are reviewing as Sonnet."
@@ -183,8 +183,8 @@ bun scripts/run-claude-code.ts \
 ### 5.2 Code Review - Opus
 
 ```
-bun scripts/run-claude-code.ts \
-  --agent-file agents/code-reviewer.md \
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/code-reviewer.md \
   --output .task/code-review-opus.json \
   --model opus \
   --instructions "Review implementation. Read .task/user-story.json, .task/plan-refined.json, and .task/impl-result.json. You are reviewing as Opus."
@@ -195,7 +195,7 @@ bun scripts/run-claude-code.ts \
 ### 5.3 Code Review - Codex
 
 ```
-bun scripts/run-codex.ts --type code
+bun .multi-ai-pipeline/scripts/run-codex.ts --type code
 ```
 
 **Status handling:** Same as above, tracks `iterations.code_review_codex`.
@@ -220,8 +220,8 @@ bun scripts/run-codex.ts --type code
 Use `json-tool.ts` to track review iterations and prevent infinite loops:
 
 ```
-bun scripts/json-tool.ts set .task/state.json +iterations.plan_review_sonnet
-bun scripts/json-tool.ts get .task/state.json .iterations.plan_review_sonnet
+bun .multi-ai-pipeline/scripts/json-tool.ts set .task/state.json +iterations.plan_review_sonnet
+bun .multi-ai-pipeline/scripts/json-tool.ts get .task/state.json .iterations.plan_review_sonnet
 ```
 
 **Max iterations per reviewer: 10**
@@ -253,8 +253,8 @@ When a reviewer sets `needs_clarification: true`, the workflow differs based on 
 4. Re-invoke the reviewer with answers in `--instructions`:
 
 ```
-bun scripts/run-claude-code.ts \
-  --agent-file agents/plan-reviewer.md \
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/plan-reviewer.md \
   --output .task/review-sonnet.json \
   --model sonnet \
   --instructions "Previous review had questions. User answers: [ANSWERS]. Please re-review the plan with these clarifications."
@@ -270,7 +270,7 @@ The re-review will overwrite the previous review file.
 4. Re-invoke Codex with `--changes-summary` containing the answers:
 
 ```
-bun scripts/run-codex.ts --type plan --changes-summary "User clarifications: [ANSWERS]"
+bun .multi-ai-pipeline/scripts/run-codex.ts --type plan --changes-summary "User clarifications: [ANSWERS]"
 ```
 
 The session marker (`.task/.codex-session-plan` or `.task/.codex-session-code`) is preserved, so Codex uses resume mode automatically. The `--changes-summary` provides context efficiently.
@@ -283,9 +283,9 @@ When delegating to Claude, you can write context to `.task/context.json` for the
 
 Example:
 ```
-bun scripts/json-tool.ts set .task/context.json phase=implementation previous_attempt=failed
-bun scripts/run-claude-code.ts \
-  --agent-file agents/implementer.md \
+bun .multi-ai-pipeline/scripts/json-tool.ts set .task/context.json phase=implementation previous_attempt=failed
+bun .multi-ai-pipeline/scripts/run-claude-code.ts \
+  --agent-file .multi-ai-pipeline/agents/implementer.md \
   --output .task/impl-result.json \
   --model sonnet \
   --instructions "Implement the plan. Check .task/context.json for additional context."
@@ -326,15 +326,15 @@ If the pipeline gets stuck or state becomes inconsistent:
 
 1. **Check current state:**
    ```
-   bun scripts/json-tool.ts get .task/state.json .status
+   bun .multi-ai-pipeline/scripts/json-tool.ts get .task/state.json .status
    ```
 
 2. **List existing task files** (use your shell tool to list the `.task/` directory)
 
 3. **Reset state if needed:**
    - Delete all files in `.task/` directory
-   - Copy `.task.template/state.json` to `.task/state.json`
-   - Use `bun scripts/json-tool.ts set .task/state.json .status idle` to reset
+   - Create fresh `.task/state.json` with proper template
+   - Use `bun .multi-ai-pipeline/scripts/json-tool.ts set .task/state.json .status idle` to reset
 
 4. **Restart from appropriate phase** based on which files still exist
 
@@ -343,8 +343,8 @@ If the pipeline gets stuck or state becomes inconsistent:
 ## Shared Knowledge
 
 Reference these for standards and workflow details:
-- `@docs/standards.md` - Review criteria, OWASP checklist, decision rules
-- `@docs/workflow.md` - Detailed V2 architecture and file formats
+- `.multi-ai-pipeline/docs/standards.md` - Review criteria, OWASP checklist, decision rules
+- `.multi-ai-pipeline/docs/workflow.md` - Detailed V2 architecture and file formats
 
 ---
 

@@ -1,474 +1,267 @@
-# Multi-AI Orchestration Pipeline
+# Multi-AI Development Pipeline V2
 
-A development pipeline that orchestrates multiple AI agents to plan, implement, review, and iterate on code changes.
+A cross-platform development pipeline orchestrating Gemini, Claude, and Codex for autonomous planning, implementation, and review.
 
-- **Gemini CLI** - Orchestrator/Coordinator (does NOT write code)
-- **Claude Code** - Plan Refiner + Implementation Coder
-- **Codex CLI** - Plan Reviewer + Code Reviewer
+## Installation
 
-> **Just want to run CC + Codex?** Check out [claude-codex](https://github.com/Z-M-Huang/claude-codex).
+### Quick Start (Recommended)
 
-## How It Works
+In your existing project:
 
-### Phase 1: Planning
-
-```
-User Request → Gemini (draft plan) → Claude (refine plan) → Codex (review plan)
-                                           ↑                       ↓
-                                           └──── needs changes ────┘
-                                                                   ↓
-                                                              approved
-                                                                   ↓
-                                                          plan-to-task.sh
+```sh
+bunx claude-codex-gemini init
+# or with npm
+npx claude-codex-gemini init
 ```
 
-### Phase 2: Implementation
+This creates:
+- `.multi-ai-pipeline/` - Pipeline orchestration files
+- Updates `GEMINI.md` - Adds pipeline reference
+- Updates `.gitignore` - Adds `.task/`
+- Creates `.task/` - Pipeline state directory
 
+### Manual Installation
+
+Clone the repo and copy the necessary files manually:
+
+```sh
+git clone https://github.com/Z-M-Huang/claude-codex-gemini.git
 ```
-Task → Claude (implement) → Internal Reviews (2 parallel) → Codex (review code) → commit
-              ↑                      |                              ↓
-              └──────────────────────+────── fix ←─── needs changes ┘
-```
 
-### Internal Reviews (Cost Optimization)
+## Architecture
 
-Before calling Codex, 2 unified Claude subagents review in parallel:
-- **Sonnet**: `reviewer-sonnet` - Fast, practical (code + security + tests)
-- **Opus**: `reviewer-opus` - Deep, thorough (architecture + vulnerabilities + test quality)
-
-This catches ~90% of issues before external API calls, significantly reducing costs.
-
-1. User describes a feature or task
-2. Gemini creates an initial plan (`plan.json`)
-3. Claude refines the plan with technical details (`plan-refined.json`)
-4. Codex reviews the plan for completeness and feasibility
-5. If plan needs changes, Claude refines again (loop until approved)
-6. Once plan approved, Gemini converts it to a task
-7. Claude implements following project standards
-8. Codex reviews code against the checklist
-9. If code needs changes, Claude fixes and Codex re-reviews
-10. Loop until approved (max iterations configurable)
-11. Commit on approval
-
-## Prerequisites
-
-- [Gemini CLI](https://github.com/google-gemini/gemini-cli) installed and authenticated
-- [Claude Code](https://claude.ai/code) installed and authenticated
-- [Codex CLI](https://github.com/openai/codex) installed and authenticated
-- `jq` for JSON processing
+- **Gemini** - Orchestrator (makes decisions, delegates work)
+- **Claude Code** - Agent executor (requirements, planning, implementation)
+- **Codex** - Final gate reviewer (independent quality assurance)
+- **Bun + TypeScript** - Cross-platform, no external dependencies, works on Windows/macOS/Linux
 
 ## Quick Start
 
-### Option A: Use as Template (New Projects)
+### Prerequisites
 
-1. **Clone/copy this repository:**
+1. **Bun** - Runtime for TypeScript scripts
+   Install from https://bun.sh (see site for platform-specific instructions)
 
-   ```bash
-   git clone https://github.com/Z-M-Huang/claude-codex-gemini.git my-project
-   cd my-project
-   rm -rf .git
-   git init
+2. **Claude CLI** - AI agent executor
+   ```sh
+   # Install from https://claude.com/claude-code
+   npm install -g @anthropic-ai/claude-cli
+   claude auth
    ```
 
-2. **Customize for your project:**
-
-   ```bash
-   # Edit standards to match your project
-   vim docs/standards.md
-
-   # Update workflow documentation
-   vim docs/workflow.md
-
-   # Configure models and autonomy level
-   vim pipeline.config.json
+3. **Codex CLI** - Final review gate
+   ```sh
+   # Install from https://codex.openai.com
+   npm install -g @openai/codex-cli
+   codex auth
    ```
 
-3. **Initialize the pipeline:**
-
-   ```bash
-   ./scripts/state-manager.sh init
-
-   # Tell git to ignore local changes to state files
-   git update-index --skip-worktree .task/state.json .task/tasks.json
+4. **Gemini CLI** - Orchestrator
+   ```sh
+   # Available at https://ai.google.dev/gemini-api/docs/cli
    ```
 
-4. **Create your first plan:**
+### Usage
 
-   ```bash
-   # Create a plan file (or let Gemini create it)
-   cat > .task/plan.json << 'EOF'
-   {
-     "id": "plan-001",
-     "title": "Your feature title",
-     "description": "What you want to build",
-     "requirements": ["requirement 1", "requirement 2"],
-     "created_at": "2025-12-18T00:00:00Z",
-     "created_by": "gemini"
-   }
-   EOF
+1. **Tell Gemini what you want:**
+   ```
+   "Add authentication to the API"
    ```
 
-5. **Run the planning phase:**
+2. **Gemini orchestrates the pipeline:**
+   - Requirements gathering (Opus)
+   - Planning (Opus)
+   - Sequential plan reviews (Sonnet → Opus → Codex)
+   - Implementation (Sonnet)
+   - Sequential code reviews (Sonnet → Opus → Codex)
 
-   ```bash
-   ./scripts/state-manager.sh set plan_refining plan-001
-   ./scripts/orchestrator.sh
-   # Wait for plan approval, then:
-   ./scripts/plan-to-task.sh
-   ```
+3. **Review results:**
+   All outputs are in `.task/` directory as JSON files.
 
-6. **Run the implementation phase:**
-   ```bash
-   ./scripts/orchestrator.sh
-   ```
+## Pipeline Phases
 
-### Option B: Adopt for Existing Projects
-
-1. **Copy the pipeline files to your project:**
-
-   ```bash
-   # From the claude-codex-gemini directory
-   cp -r scripts/ /path/to/your/project/
-   cp -r docs/ /path/to/your/project/
-   cp pipeline.config.json /path/to/your/project/
-   cp GEMINI.md CLAUDE.md AGENTS.md /path/to/your/project/
-   mkdir -p /path/to/your/project/.task
-   ```
-
-2. **Add to .gitignore:**
-
-   ```bash
-   echo ".task/" >> /path/to/your/project/.gitignore
-   ```
-
-3. **Customize docs/standards.md for your project:**
-
-   Update the coding standards to match your existing conventions:
-
-   - Naming conventions (files, classes, functions)
-   - Code style rules
-   - Testing requirements
-   - Security requirements
-
-4. **Update the agent config files:**
-
-   Edit `GEMINI.md`, `CLAUDE.md`, and `AGENTS.md` to reference your project-specific context:
-
-   ```markdown
-   # In GEMINI.md, add project-specific imports
-
-   @docs/your-project-docs.md
-   @src/README.md
-   ```
-
-5. **Configure the pipeline:**
-
-   Edit `pipeline.config.json`:
-
-   ```json
-   {
-     "autonomy": {
-       "mode": "semi-autonomous",
-       "reviewLoopLimit": 5
-     },
-     "models": {
-       "coder": { "model": "claude-opus-4.5" },
-       "reviewer": { "model": "gpt-5.2" }
-     }
-   }
-   ```
-
-6. **Initialize and run:**
-   ```bash
-   cd /path/to/your/project
-   ./scripts/state-manager.sh init
-   ```
-
-## After Cloning
-
-The `.task/` folder contains initial state files that are tracked in git but should not have local changes committed. After cloning, run:
-
-```bash
-git update-index --skip-worktree .task/state.json .task/tasks.json
-```
-
-This tells git to ignore your local modifications to these files. The `.gitignore` already excludes new files in `.task/` (like `impl-result.json`, `review-result.json`, error logs).
-
-**To check skip-worktree status:**
-
-```bash
-git ls-files -v .task/ | grep '^S'  # S = skip-worktree is set
-```
-
-**To undo (if you need to commit changes):**
-
-```bash
-git update-index --no-skip-worktree .task/state.json
-```
-
-## Project Structure
+The pipeline auto-detects the current phase by checking which `.task/*.json` files exist:
 
 ```
-your-project/
-├── pipeline.config.json      # Pipeline configuration
-├── GEMINI.md                 # Gemini orchestrator instructions
-├── CLAUDE.md                 # Claude coder/refiner instructions
-├── AGENTS.md                 # Codex reviewer instructions
-├── .claude/
-│   └── agents/               # Internal review subagents
-│       ├── reviewer-sonnet.md    # Fast unified review (code + security + tests)
-│       └── reviewer-opus.md      # Deep unified review (architecture + vulnerabilities)
-├── docs/
-│   ├── standards.md          # Coding + review standards
-│   ├── workflow.md           # Process documentation
-│   └── schemas/
-│       ├── review-result.schema.json   # Code review output schema
-│       └── plan-review.schema.json     # Plan review output schema
-├── scripts/
-│   ├── orchestrator.sh       # Main pipeline loop
-│   ├── run-claude.sh         # Claude implementation executor
-│   ├── run-claude-plan.sh    # Claude plan refinement executor
-│   ├── run-codex-review.sh   # Codex code review executor
-│   ├── run-codex-plan-review.sh  # Codex plan review executor
-│   ├── run-internal-reviews.sh   # Parallel internal reviews (2 unified agents)
-│   ├── plan-to-task.sh       # Convert approved plan to task
-│   ├── state-manager.sh      # State management
-│   ├── error-handler.sh      # Error logging
-│   └── recover.sh            # Recovery tool
-└── .task/                    # Runtime state (gitignored)
-    ├── state.json            # Pipeline state
-    ├── tasks.json            # Task queue
-    ├── plan.json             # Initial plan (Gemini creates)
-    ├── plan-refined.json     # Refined plan (Claude creates)
-    ├── plan-review.json      # Plan review (Codex creates)
-    ├── current-task.json     # Active task
-    ├── impl-result.json      # Implementation output
-    ├── review-result.json    # Code review output
-    └── internal-review-*.json  # Internal review outputs
+Requirements → Planning → Plan Review → Implementation → Code Review → Complete
+                             ↓                              ↓
+                 (Sonnet → Opus → Codex)       (Sonnet → Opus → Codex)
 ```
 
-## Usage
+### Phase Detection
 
-### Phase 1: Create and Approve a Plan
+| File Missing | Phase | Agent |
+|--------------|-------|-------|
+| `user-story.json` | Requirements | requirements-gatherer (Opus) |
+| `plan-refined.json` | Planning | planner (Opus) |
+| `review-sonnet.json` | Plan Review (Sonnet) | plan-reviewer (Sonnet) |
+| `review-opus.json` | Plan Review (Opus) | plan-reviewer (Opus) |
+| `review-codex.json` | Plan Review (Codex) | codex-reviewer |
+| `impl-result.json` | Implementation | implementer (Sonnet) |
+| `code-review-sonnet.json` | Code Review (Sonnet) | code-reviewer (Sonnet) |
+| `code-review-opus.json` | Code Review (Opus) | code-reviewer (Opus) |
+| `code-review-codex.json` | Code Review (Codex) | codex-reviewer |
 
-**Step 1: Create initial plan (Gemini does this)**
+## Cross-Platform Scripts
 
-```bash
-cat > .task/plan.json << 'EOF'
-{
-  "id": "plan-001",
-  "title": "Add user authentication",
-  "description": "Implement JWT-based authentication with login/logout",
-  "requirements": [
-    "POST /api/login endpoint",
-    "POST /api/logout endpoint",
-    "JWT token validation middleware",
-    "Unit tests for auth functions"
-  ],
-  "created_at": "2025-12-18T00:00:00Z",
-  "created_by": "gemini"
-}
-EOF
+All operations use these 3 TypeScript scripts (Windows/macOS/Linux):
+
+### 1. json-tool.ts
+
+Cross-platform JSON operations for state management:
+```sh
+bun scripts/json-tool.ts get .task/state.json .status
+bun scripts/json-tool.ts set .task/state.json status=implementing
+bun scripts/json-tool.ts set .task/state.json +iterations.plan_review_sonnet
 ```
 
-**Step 2: Refine and review the plan**
+### 2. run-claude-code.ts
 
-```bash
-# Set state and run plan refinement (Claude)
-./scripts/state-manager.sh set plan_refining plan-001
-./scripts/orchestrator.sh
-
-# This will automatically:
-# 1. Claude refines plan -> plan-refined.json
-# 2. Codex reviews plan -> plan-review.json
-# 3. Loop until approved or limit reached
+Spawns Claude CLI with agent context:
+```sh
+bun scripts/run-claude-code.ts \
+  --agent-file agents/planner.md \
+  --output .task/plan-refined.json \
+  --model opus \
+  --instructions "Create implementation plan"
 ```
 
-**Step 3: Convert approved plan to task**
+Features:
+- Automatic standards injection
+- Platform-aware spawning (shell: true on Windows, false on Unix)
+- Output validation
 
-```bash
-# Check if plan was approved
-cat .task/plan-review.json | jq '.status'
+### 3. run-codex.ts
 
-# If approved, convert to task
-./scripts/plan-to-task.sh
+Wraps Codex CLI for reviews:
+```sh
+bun scripts/run-codex.ts --type plan
+bun scripts/run-codex.ts --type code --timeout 1800
 ```
 
-### Phase 2: Implementation
+Features:
+- Type-scoped session management (`.codex-session-plan`, `.codex-session-code`)
+- Auto-retry on session expiry
+- Schema validation
 
-```bash
-# Run the implementation pipeline
-./scripts/orchestrator.sh
+## Review Chain
 
-# This will automatically:
-# 1. Claude implements -> impl-result.json
-# 2. Codex reviews code -> review-result.json
-# 3. Loop until approved or limit reached
+Reviews happen sequentially (NOT parallel) for quality gates:
+
+**Plan Review:** Sonnet → Opus → Codex
+**Code Review:** Sonnet → Opus → Codex
+
+Each reviewer must approve before proceeding. If `needs_changes`, Gemini fixes and re-reviews (max 10 iterations per reviewer).
+
+### Review Statuses
+
+- **approved** - No blocking issues, proceed
+- **needs_changes** - Issues found, must fix
+- **needs_clarification** - Ask user for clarification
+- **rejected** - Fundamental flaws (Codex only, terminal for plans)
+
+## Custom Agents
+
+6 specialized agents in `agents/` directory:
+
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| requirements-gatherer | Opus | Gather user requirements |
+| planner | Opus | Create implementation plans |
+| plan-reviewer | Sonnet/Opus | Review plans |
+| implementer | Sonnet | Implement plans |
+| code-reviewer | Sonnet/Opus | Review code |
+| codex-reviewer | Codex | Final gate reviews |
+
+## State Management
+
+All pipeline state lives in `.task/`:
+
+```
+.task/
+├── state.json                   # Pipeline state, iteration counters
+├── user-story.json             # Requirements
+├── plan-refined.json           # Implementation plan
+├── review-sonnet.json          # Sonnet's plan review
+├── review-opus.json            # Opus's plan review
+├── review-codex.json           # Codex's plan review
+├── impl-result.json            # Implementation results
+├── code-review-sonnet.json     # Sonnet's code review
+├── code-review-opus.json       # Opus's code review
+├── code-review-codex.json      # Codex's code review
+├── .codex-session-plan         # Codex plan review session marker
+└── .codex-session-code         # Codex code review session marker
 ```
 
-### Check Status
+## Iteration Tracking
 
-```bash
-./scripts/orchestrator.sh status
-```
-
-### Dry Run (Validation)
-
-Validate your pipeline setup without running it:
-
-```bash
-./scripts/orchestrator.sh dry-run
-```
-
-This checks:
-
-- `.task/` directory and state file validity
-- `pipeline.config.json` validity
-- Required scripts present and executable
-- Required docs (`standards.md`, `workflow.md`)
-- `.task` in `.gitignore`
-- CLI tools (`jq` required, `claude`/`codex`/`gemini` optional)
-
-### Recovery
-
-```bash
-# Interactive recovery menu
-./scripts/recover.sh
-
-# Or reset directly
-./scripts/orchestrator.sh reset
-```
-
-### Handling User Input Requests
-
-If Claude needs clarification, the pipeline pauses with `needs_user_input` state:
-
-```bash
-# Check what questions need answering
-cat .task/state.json | jq '.previous_state'  # See which phase
-cat .task/plan-refined.json | jq '.questions'  # Plan phase questions
-cat .task/impl-result.json | jq '.questions'   # Implementation questions
-
-# After providing answers, resume:
-./scripts/state-manager.sh set plan_refining plan-001  # or implementing task-001
-./scripts/orchestrator.sh
-```
-
-## Configuration
-
-### pipeline.config.json
-
-| Setting                             | Description                                   | Default           |
-| ----------------------------------- | --------------------------------------------- | ----------------- |
-| `autonomy.mode`                     | `autonomous`, `semi-autonomous`, `supervised` | `semi-autonomous` |
-| `autonomy.reviewLoopLimit`          | Max review iterations (legacy, fallback)      | `5`               |
-| `autonomy.planReviewLoopLimit`      | Max plan review iterations                    | `3`               |
-| `autonomy.codeReviewLoopLimit`      | Max code review iterations                    | `5`               |
-| `autonomy.autoCommit`               | Auto-commit on approval                       | `false`           |
-| `errorHandling.autoResolveAttempts` | Retries before pausing                        | `3`               |
-| `models.coder.model`                | Claude model                                  | `claude-opus-4.5` |
-| `models.reviewer.model`             | Codex model                                   | `gpt-5.2`         |
-| `debate.enabled`                    | Allow Gemini to challenge reviews             | `true`            |
-| `debate.maxRounds`                  | Max debate rounds                             | `2`               |
-
-> **Note (MVP):** Branch strategy settings are defined in config but not yet implemented. Auto-commit is controlled by `autonomy.autoCommit`.
-
-### Local Config Overrides
-
-Create `pipeline.config.local.json` to override settings without modifying the tracked config:
+Gemini tracks iterations in `.task/state.json` to prevent infinite loops:
 
 ```json
 {
-  "autonomy": {
-    "planReviewLoopLimit": 5,
-    "codeReviewLoopLimit": 10
+  "iterations": {
+    "plan_review_sonnet": 2,
+    "plan_review_opus": 1,
+    "plan_review_codex": 3,
+    "code_review_sonnet": 0,
+    "code_review_opus": 0,
+    "code_review_codex": 0
   }
 }
 ```
 
-This file is gitignored and will be merged on top of `pipeline.config.json`.
+**Max iterations: 10 per reviewer**
 
-### Autonomy Modes
+If a reviewer hits 10 iterations, Gemini escalates to user (likely conflicting requirements).
 
-| Mode              | Planning | Implementation | Review | Commit     |
-| ----------------- | -------- | -------------- | ------ | ---------- |
-| `autonomous`      | Auto     | Auto           | Auto   | Auto       |
-| `semi-autonomous` | Auto     | Auto           | Auto   | **Manual** |
-| `supervised`      | Manual   | Manual         | Manual | Manual     |
+## Documentation
 
-## Customization
+- **GEMINI.md** - Orchestrator instructions (Gemini reads this)
+- **CLAUDE.md** - Agent context (Claude reads this)
+- **AGENTS.md** - Final gate reviewer context (Codex reads this)
+- **docs/standards.md** - Review criteria (OWASP, error handling, quality)
+- **docs/workflow.md** - Detailed V2 architecture
+- **agents/\*.md** - Agent behavior definitions
 
-### Adding Project-Specific Standards
+## Session Management
 
-Edit `docs/standards.md`:
+Codex sessions are automatically managed per review type:
 
-```markdown
-# Project Standards
+- `.task/.codex-session-plan` - Plan review sessions
+- `.task/.codex-session-code` - Code review sessions
 
-## Coding Standards
+Benefits:
+- First review: Fresh Codex session
+- Subsequent reviews: Automatic resume with context
+- Session expired: Auto-retry without resume
+- Type-scoped: Plan sessions don't affect code sessions
 
-- Use TypeScript strict mode
-- All functions must have JSDoc comments
-- No console.log in production code
+## Differences from V1
 
-## Review Checklist
+- **No bash scripts** - All TypeScript, cross-platform
+- **No external JSON tools** - json-tool.ts handles all JSON operations natively
+- **Sequential reviews** - Quality gates instead of parallel (Sonnet → Opus → Codex)
+- **File-system-as-state** - Phase detection via file existence
+- **Type-scoped sessions** - Separate Codex sessions for plan vs code reviews
+- **Unified agent files** - All agent behavior in `agents/` directory
+- **Needs clarification** - Reviewers can pause to ask user questions
 
-### Must Check (severity: error)
+## Contributing
 
-- No hardcoded secrets
-- All API endpoints have auth middleware
-- Database queries use parameterized statements
-```
+This project follows the V2 architecture. When contributing:
 
-### Modifying Review Schema
-
-Edit `docs/schemas/review-result.schema.json` to add custom checklist items:
-
-```json
-{
-  "checklist": {
-    "properties": {
-      "security": { "enum": ["PASS", "WARN", "FAIL"] },
-      "performance": { "enum": ["PASS", "WARN", "FAIL"] },
-      "your_custom_check": { "enum": ["PASS", "WARN", "FAIL"] }
-    }
-  }
-}
-```
-
-## Troubleshooting
-
-### Pipeline stuck in error state
-
-```bash
-./scripts/recover.sh
-# Select option 1 to reset to idle
-```
-
-### Claude not creating output file
-
-Check that Claude has the right permissions:
-
-```bash
-# Verify CLAUDE.md instructions mention the output file
-grep "impl-result.json" CLAUDE.md
-```
-
-### Codex review failing
-
-Verify the schema is valid:
-
-```bash
-jq empty docs/schemas/review-result.schema.json
-```
-
-### View error logs
-
-```bash
-ls -la .task/errors/
-cat .task/errors/error-*.json | jq
-```
+1. Use path.join() for all file paths (never string concat with '/')
+2. Test on Windows, macOS, and Linux
+3. Follow docs/standards.md for code quality
+4. Ensure scripts work with Bun runtime
 
 ## License
 
-GPL-3.0 license
+GPL-3.0 — see [LICENSE](./LICENSE) for details.
+
+## Links
+
+- **Upstream Project**: [claude-codex](https://github.com/Z-M-Huang/claude-codex) - Codex CLI wrapper plugin
+- **Claude CLI**: https://claude.com/claude-code
+- **Codex CLI**: https://codex.openai.com
+- **Bun Runtime**: https://bun.sh

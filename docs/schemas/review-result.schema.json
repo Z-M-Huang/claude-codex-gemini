@@ -1,10 +1,70 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
+  "required": ["status", "needs_clarification", "clarification_questions", "summary", "issues", "checklist", "acceptance_criteria_verification"],
   "properties": {
     "status": {
       "type": "string",
-      "enum": ["approved", "needs_changes", "rejected"]
+      "enum": ["approved", "needs_changes", "needs_clarification", "rejected"]
+    },
+    "acceptance_criteria_verification": {
+      "type": "object",
+      "description": "Verifies each acceptance criterion from user-story.json against the implementation",
+      "required": ["total", "verified", "missing", "details"],
+      "properties": {
+        "total": {
+          "type": "number",
+          "description": "Total number of acceptance criteria"
+        },
+        "verified": {
+          "type": "number",
+          "description": "Number of ACs verified as IMPLEMENTED"
+        },
+        "missing": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of AC IDs not implemented"
+        },
+        "details": {
+          "type": "array",
+          "description": "Array of AC verification results",
+          "items": {
+            "type": "object",
+            "required": ["ac_id", "status", "evidence", "notes"],
+            "properties": {
+              "ac_id": {
+                "type": "string",
+                "description": "Acceptance criterion ID (e.g., 'AC1')"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["IMPLEMENTED", "NOT_IMPLEMENTED", "PARTIAL"],
+                "description": "Implementation status for this AC"
+              },
+              "evidence": {
+                "type": "string",
+                "description": "Code location or test proving implementation"
+              },
+              "notes": {
+                "type": "string",
+                "description": "Additional notes about the verification"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "needs_clarification": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, pauses autonomous pipeline to ask user for clarification on ambiguous requirements"
+    },
+    "clarification_questions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Questions to ask user when needs_clarification is true"
     },
     "summary": {
       "type": "string",
@@ -17,11 +77,16 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "Unique issue ID for debate references (e.g., issue-1)"
+            "description": "Unique issue ID for references (e.g., issue-1)"
           },
           "severity": {
             "type": "string",
             "enum": ["error", "warning", "suggestion"]
+          },
+          "category": {
+            "type": "string",
+            "enum": ["security", "error_handling", "resource", "config", "quality", "concurrency", "logging", "deps", "api", "compat", "test", "over_engineering"],
+            "description": "Review category this issue belongs to"
           },
           "file": {
             "type": "string"
@@ -36,44 +101,184 @@
             "type": "string"
           }
         },
-        "required": ["id", "severity", "file", "line", "message", "suggestion"],
+        "required": ["id", "severity", "category", "file", "line", "message", "suggestion"],
         "additionalProperties": false
       }
     },
     "checklist": {
       "type": "object",
       "properties": {
-        "security": {
+        "security_owasp": {
           "type": "string",
-          "enum": ["PASS", "WARN", "FAIL"]
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "OWASP Top 10 security check"
         },
-        "logic": {
+        "error_handling": {
           "type": "string",
-          "enum": ["PASS", "WARN", "FAIL"]
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "Error handling completeness"
         },
-        "standards": {
+        "resource_management": {
           "type": "string",
-          "enum": ["PASS", "WARN", "FAIL"]
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "Memory/connection leak prevention"
         },
-        "tests": {
+        "configuration": {
           "type": "string",
-          "enum": ["PASS", "WARN", "FAIL"]
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "No hardcoded secrets/values"
+        },
+        "code_quality": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "Readability, simplification, comments, DRY"
+        },
+        "concurrency": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL", "N/A"],
+          "description": "Race conditions, thread safety"
+        },
+        "logging": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "No secrets in logs, appropriate logging"
+        },
+        "dependencies": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "No CVEs, minimal dependencies"
+        },
+        "api_design": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL", "N/A"],
+          "description": "Input validation, response consistency"
+        },
+        "backward_compatibility": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL", "N/A"],
+          "description": "Breaking changes, migration"
+        },
+        "testing": {
+          "type": "string",
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "Test coverage and quality"
         },
         "over_engineering": {
           "type": "string",
-          "enum": ["PASS", "WARN", "FAIL"]
+          "enum": ["PASS", "WARN", "FAIL"],
+          "description": "Unnecessary complexity detection"
         }
       },
       "required": [
-        "security",
-        "logic",
-        "standards",
-        "tests",
+        "security_owasp",
+        "error_handling",
+        "resource_management",
+        "configuration",
+        "code_quality",
+        "concurrency",
+        "logging",
+        "dependencies",
+        "api_design",
+        "backward_compatibility",
+        "testing",
         "over_engineering"
       ],
       "additionalProperties": false
+    },
+    "scores": {
+      "type": "object",
+      "description": "Optional numeric scores for different aspects",
+      "required": ["security", "performance", "quality", "test_coverage", "plan_compliance", "acceptance_criteria", "overall"],
+      "properties": {
+        "security": { "type": "number" },
+        "performance": { "type": "number" },
+        "quality": { "type": "number" },
+        "test_coverage": { "type": "number" },
+        "plan_compliance": { "type": "number" },
+        "acceptance_criteria": { "type": "number" },
+        "overall": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "security_findings": {
+      "type": "object",
+      "description": "Detailed security findings",
+      "required": ["owasp_violations", "secrets_found", "input_validation_gaps"],
+      "properties": {
+        "owasp_violations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "OWASP violations found"
+        },
+        "secrets_found": {
+          "type": "boolean",
+          "description": "Whether hardcoded secrets were found"
+        },
+        "input_validation_gaps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Missing input validation"
+        }
+      },
+      "additionalProperties": false
+    },
+    "test_analysis": {
+      "type": "object",
+      "description": "Test coverage analysis",
+      "required": ["coverage", "new_code_coverage", "missing_tests", "test_quality"],
+      "properties": {
+        "coverage": { "type": "string", "description": "Overall test coverage percentage" },
+        "new_code_coverage": { "type": "string", "description": "Coverage of new code only" },
+        "missing_tests": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Areas missing test coverage"
+        },
+        "test_quality": { "type": "string", "description": "Assessment of test quality" }
+      },
+      "additionalProperties": false
+    },
+    "findings": {
+      "type": "array",
+      "description": "Optional extended findings format (used by Claude-based reviewers for richer data)",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "severity", "title", "description", "recommendation", "file", "line", "code_snippet", "effort"],
+        "properties": {
+          "id": { "type": "string" },
+          "category": { "type": "string" },
+          "severity": { "type": "string" },
+          "title": { "type": "string" },
+          "file": { "type": "string" },
+          "line": { "type": "number" },
+          "code_snippet": { "type": "string" },
+          "description": { "type": "string" },
+          "recommendation": { "type": "string" },
+          "effort": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Critical issues that must be fixed"
+    },
+    "recommendations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Suggested improvements"
+    },
+    "approval_conditions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What must be done for approval"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 timestamp of when review was completed"
     }
   },
-  "required": ["status", "summary", "issues", "checklist"],
   "additionalProperties": false
 }

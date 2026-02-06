@@ -1,0 +1,39 @@
+{
+  "name": "claude-codex-gemini",
+  "version": "1.0.0",
+  "description": "Multi-AI development pipeline orchestrated by Gemini with Claude and Codex agents",
+  "type": "module",
+  "bin": {
+    "claude-codex-gemini": "./bin/init.js"
+  },
+  "files": [
+    "bin/",
+    "agents/",
+    "scripts/",
+    "docs/",
+    "ORCHESTRATOR.md"
+  ],
+  "keywords": [
+    "ai",
+    "pipeline",
+    "claude",
+    "codex",
+    "gemini",
+    "orchestrator"
+  ],
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Z-M-Huang/claude-codex-gemini.git"
+  },
+  "homepage": "https://github.com/Z-M-Huang/claude-codex-gemini#readme",
+  "bugs": {
+    "url": "https://github.com/Z-M-Huang/claude-codex-gemini/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "bun test/init.test.ts"
+  }
+}
